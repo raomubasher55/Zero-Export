@@ -393,6 +393,24 @@ npm run check       # lint + test
 npm audit
 ```
 
+## Frontend EMS console
+
+The React/Vite frontend is now wired to the live backend rather than a sample
+endpoint. It provides an operations dashboard for:
+
+- Backend/MongoDB health and polling-scheduler state.
+- Device and Register Profile CRUD, including TCP/RTU transport settings,
+  polling/retry policy, and editable register definitions.
+- Device connection control, manual decoded polls, raw Modbus read/write tools,
+  latest decoded values, and retained communication history.
+- Responsive fleet/profile views with backend validation errors and request
+  failures surfaced in the UI.
+
+For a separately hosted backend, copy
+[`frontend/.env.example`](frontend/.env.example) to `frontend/.env` and set
+`VITE_API_BASE_URL` to the API's `/api/v1` base URL. In local development, the
+Vite proxy routes `/api` requests to `http://localhost:3001` automatically.
+
 ## Development convenience
 
 From the repository root, the existing scripts can launch both applications:
@@ -401,5 +419,5 @@ From the repository root, the existing scripts can launch both applications:
 npm run dev
 ```
 
-The frontend remains available at `http://localhost:5173`; the backend is at
+The frontend is available at `http://localhost:5173`; the backend is at
 `http://localhost:3001` by default.
