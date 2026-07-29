@@ -22,7 +22,7 @@ export function deviceToForm(device) {
     },
     polling: {
       enabled: device?.polling?.enabled ?? true,
-      intervalMs: String(device?.polling?.intervalMs ?? 60000),
+      intervalMs: String(device?.polling?.intervalMs ?? 5000),
       jitterMs: String(device?.polling?.jitterMs ?? 0),
     },
     reconnect: {

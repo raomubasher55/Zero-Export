@@ -27,6 +27,7 @@ test('DeviceService maps an assigned active profile to the persisted reference f
 
   assert.equal(persistedPayload.registerProfile, '507f1f77bcf86cd799439011');
   assert.equal('registerProfileId' in persistedPayload, false);
+  assert.ok(persistedPayload.nextPollAt instanceof Date);
   assert.equal(created.identifier, 'main-meter');
 });
 
@@ -64,6 +65,33 @@ test('RegisterProfileService prevents deletion while devices reference the profi
     service.delete('507f1f77bcf86cd799439011'),
     (error) => error.code === 'CONFLICT' && error.statusCode === 409,
   );
+});
+
+test('DeviceService schedules an immediate automatic poll when polling settings change', async () => {
+  let persistedPayload;
+  const service = new DeviceService({
+    registerProfileRepository: {},
+    connectionManager: { invalidateDevice: async () => undefined },
+    deviceRepository: {
+      findById: async () => ({
+        isEnabled: true,
+        registerProfile: '507f1f77bcf86cd799439011',
+        polling: { enabled: true, intervalMs: 60000, jitterMs: 0 },
+        reconnect: { timeoutMs: 3000, retries: 2, retryDelayMs: 500 },
+      }),
+      updateByIdWithProfile: async (_deviceId, payload) => {
+        persistedPayload = payload;
+        return payload;
+      },
+    },
+  });
+
+  await service.update('507f1f77bcf86cd799439012', {
+    polling: { intervalMs: 5000 },
+  });
+
+  assert.equal(persistedPayload.polling.intervalMs, 5000);
+  assert.ok(persistedPayload.nextPollAt instanceof Date);
 });
 
 test('DeviceService releases a pooled connection when transport configuration changes', async () => {

@@ -72,7 +72,7 @@ const pollingSchema = new mongoose.Schema(
       type: Number,
       min: 1000,
       max: 86400000,
-      default: 60000,
+      default: 5000,
     },
     jitterMs: {
       type: Number,

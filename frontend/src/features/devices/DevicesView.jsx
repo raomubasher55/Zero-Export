@@ -1,4 +1,5 @@
 import { CirclePlus, Pencil, Play, Plug, Trash2 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -13,7 +14,7 @@ import {
   EmptyState,
   StatusBadge,
 } from "@/components/common/Feedback";
-import { formatRelative } from "@/lib/formatters";
+import { formatCountdown, formatRelative } from "@/lib/formatters";
 
 export function DevicesView({
   devices,
@@ -70,13 +71,14 @@ export function DevicesView({
             />
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[940px] text-sm">
+              <table className="w-full min-w-[1080px] text-sm">
                 <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
                   <tr>
                     <th className="px-5 py-3 font-semibold">Device</th>
                     <th className="px-4 py-3 font-semibold">Transport</th>
                     <th className="px-4 py-3 font-semibold">Profile</th>
                     <th className="px-4 py-3 font-semibold">Status</th>
+                    <th className="px-4 py-3 font-semibold">Automatic polling</th>
                     <th className="px-4 py-3 font-semibold">
                       Last communication
                     </th>
@@ -119,6 +121,23 @@ export function DevicesView({
                       </td>
                       <td className="px-4 py-4">
                         <StatusBadge status={device.status} />
+                      </td>
+                      <td className="px-4 py-4">
+                        <Badge
+                          variant="outline"
+                          className={
+                            device.isEnabled && device.polling?.enabled && device.registerProfile
+                              ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                              : "border-slate-200 bg-slate-100 text-slate-600"
+                          }
+                        >
+                          {device.isEnabled && device.polling?.enabled && device.registerProfile
+                            ? `Every ${(device.polling.intervalMs / 1000).toFixed(device.polling.intervalMs % 1000 ? 1 : 0)}s`
+                            : "Disabled"}
+                        </Badge>
+                        <p className="mt-1 text-xs text-slate-500">
+                          {formatCountdown(device.nextPollAt)}
+                        </p>
                       </td>
                       <td className="px-4 py-4">
                         <p>{formatRelative(device.lastCommunicationAt)}</p>

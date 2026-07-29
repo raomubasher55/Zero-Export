@@ -30,4 +30,8 @@ test('PollingScheduler claims and executes due devices up to its configured conc
 
   assert.deepEqual(executed.sort(), ['first:lease-first', 'second:lease-second']);
   assert.equal(scheduler.getStatus().activePolls, 0);
+  assert.equal(scheduler.getStatus().completedPolls, 2);
+  assert.equal(scheduler.getStatus().successfulPolls, 2);
+  assert.equal(scheduler.getStatus().failedPolls, 0);
+  assert.ok(scheduler.getStatus().lastPollCompletedAt instanceof Date);
 });

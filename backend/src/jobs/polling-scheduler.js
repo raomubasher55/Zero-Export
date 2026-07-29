@@ -20,6 +20,11 @@ class PollingScheduler {
     this.cycleRunning = false;
     this.activeTasks = new Set();
     this.lastCycleAt = null;
+    this.lastPollCompletedAt = null;
+    this.lastPollError = null;
+    this.completedPolls = 0;
+    this.successfulPolls = 0;
+    this.failedPolls = 0;
     this.lastError = null;
   }
 
@@ -92,7 +97,16 @@ class PollingScheduler {
   async executeClaimedPoll({ device, leaseId }) {
     try {
       await this.pollingService.pollClaimedDevice(device, leaseId);
+      this.successfulPolls += 1;
+      this.lastPollError = null;
     } catch (error) {
+      this.failedPolls += 1;
+      this.lastPollError = {
+        deviceId: String(device._id),
+        code: error.code,
+        message: error.message,
+        at: new Date(),
+      };
       // pollClaimedDevice already writes the runtime failure state and a
       // communication log. The scheduler remains available for other devices.
       this.logger.warn('Scheduled Modbus poll failed', {
@@ -100,6 +114,9 @@ class PollingScheduler {
         code: error.code,
         error: error.message,
       });
+    } finally {
+      this.completedPolls += 1;
+      this.lastPollCompletedAt = new Date();
     }
   }
 
@@ -110,7 +127,12 @@ class PollingScheduler {
       concurrency: this.concurrency,
       tickIntervalMs: this.tickIntervalMs,
       activePolls: this.activeTasks.size,
+      completedPolls: this.completedPolls,
+      successfulPolls: this.successfulPolls,
+      failedPolls: this.failedPolls,
       lastCycleAt: this.lastCycleAt,
+      lastPollCompletedAt: this.lastPollCompletedAt,
+      lastPollError: this.lastPollError,
       lastError: this.lastError,
     };
   }

@@ -13,6 +13,16 @@ export function formatDate(value) {
   }).format(new Date(value));
 }
 
+export function formatCountdown(value) {
+  if (!value) return "Not scheduled";
+  const seconds = Math.round((new Date(value).getTime() - Date.now()) / 1000);
+  if (seconds <= 0) return "Due now";
+  if (seconds < 60) return `in ${seconds}s`;
+  if (seconds < 3600) return `in ${Math.ceil(seconds / 60)}m`;
+  if (seconds < 86400) return `in ${Math.ceil(seconds / 3600)}h`;
+  return `in ${Math.ceil(seconds / 86400)}d`;
+}
+
 export function formatRelative(value) {
   if (!value) return "Never";
   const seconds = Math.max(

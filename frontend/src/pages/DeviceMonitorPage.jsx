@@ -59,6 +59,7 @@ export function DeviceMonitorPage({ data }) {
   return (
     <DeviceMonitor
       device={device}
+      scheduler={data.scheduler}
       onBack={() => navigate("/devices")}
       onRefresh={data.refresh}
       notify={data.notify}

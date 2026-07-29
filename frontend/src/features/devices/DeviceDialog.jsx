@@ -278,7 +278,7 @@ export function DeviceDialog({ open, onOpenChange, device, profiles, onSave }) {
                 />
                 <Field
                   label="Interval (ms)"
-                  hint="Time between scheduled polls; minimum 1000 ms."
+                  hint="Time between automatic background polls; minimum 1000 ms. Saving a new interval schedules an immediate poll."
                 >
                   <Input
                     type="number"
@@ -291,6 +291,25 @@ export function DeviceDialog({ open, onOpenChange, device, profiles, onSave }) {
                       })
                     }
                   />
+                  <div className="flex flex-wrap gap-1.5">
+                    {[1000, 2000, 5000, 10000, 60000].map((interval) => (
+                      <Button
+                        key={interval}
+                        type="button"
+                        size="sm"
+                        variant={Number(form.polling.intervalMs) === interval ? "default" : "outline"}
+                        className="h-7 px-2 text-[11px]"
+                        onClick={() =>
+                          set("polling", {
+                            ...form.polling,
+                            intervalMs: String(interval),
+                          })
+                        }
+                      >
+                        {interval < 60000 ? `${interval / 1000}s` : "60s"}
+                      </Button>
+                    ))}
+                  </div>
                 </Field>
                 <Field
                   label="Jitter (ms)"

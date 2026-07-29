@@ -30,13 +30,14 @@ import { Select } from "@/components/common/FormControls";
 import { OUTCOME_STYLES, REGISTER_TYPES } from "@/constants/modbus";
 import { api } from "@/lib/api";
 import {
+  formatCountdown,
   formatDate,
   formatRelative,
   formatValue,
   getErrorMessage,
 } from "@/lib/formatters";
 
-export function DeviceMonitor({ device, onBack, onRefresh, notify }) {
+export function DeviceMonitor({ device, scheduler, onBack, onRefresh, notify }) {
   const [connection, setConnection] = useState(null);
   const [values, setValues] = useState([]);
   const [logs, setLogs] = useState([]);
@@ -44,8 +45,8 @@ export function DeviceMonitor({ device, onBack, onRefresh, notify }) {
   const [working, setWorking] = useState(false);
   const [error, setError] = useState("");
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) setLoading(true);
     const results = await Promise.allSettled([
       api.getConnection(device._id),
       api.listLatestValues(device._id, { limit: 100 }),
@@ -57,12 +58,37 @@ export function DeviceMonitor({ device, onBack, onRefresh, notify }) {
     if (results[2].status === "fulfilled") setLogs(results[2].value.data || []);
     const rejected = results.find((result) => result.status === "rejected");
     setError(rejected ? getErrorMessage(rejected.reason) : "");
-    setLoading(false);
+    if (!silent) setLoading(false);
   }, [device._id]);
 
   useEffect(() => {
     load();
   }, [load]);
+
+  const liveRefreshMs = Math.min(
+    10000,
+    Math.max(3000, Number(device.polling?.intervalMs) || 5000),
+  );
+
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      try {
+        const response = await api.listLatestValues(device._id, { limit: 100 });
+        setValues(response.data || []);
+        setError("");
+      } catch (refreshError) {
+        setError(getErrorMessage(refreshError));
+      }
+    }, liveRefreshMs);
+    return () => clearInterval(interval);
+  }, [device._id, liveRefreshMs]);
+
+  const autoPollingActive = Boolean(
+    scheduler?.running &&
+      device.isEnabled &&
+      device.polling?.enabled &&
+      device.registerProfile,
+  );
 
   const execute = async (operation, success) => {
     setWorking(true);
@@ -99,6 +125,21 @@ export function DeviceMonitor({ device, onBack, onRefresh, notify }) {
             {device.identifier} · unit {device.unitId} ·{" "}
             {device.connection?.protocol}
           </p>
+          <div className="mt-2 flex flex-wrap gap-2 text-xs">
+            <Badge
+              variant="outline"
+              className={
+                autoPollingActive
+                  ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                  : "border-amber-200 bg-amber-50 text-amber-700"
+              }
+            >
+              Auto polling {autoPollingActive ? "RUNNING" : "STOPPED"}
+            </Badge>
+            <span className="text-slate-500">
+              Every {Math.round((device.polling?.intervalMs || 0) / 1000)}s · last {formatRelative(device.lastPollAt)} · next {formatCountdown(device.nextPollAt)}
+            </span>
+          </div>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button
@@ -153,6 +194,9 @@ export function DeviceMonitor({ device, onBack, onRefresh, notify }) {
               <CardTitle className="flex flex-wrap items-center gap-2">
                 Latest decoded values
                 <Badge variant="outline">{values.length}</Badge>
+                <Badge className="border-emerald-200 bg-emerald-50 text-emerald-700" variant="outline">
+                  Live · {liveRefreshMs / 1000}s
+                </Badge>
               </CardTitle>
               <CardDescription>
                 Current persisted values from the assigned profile

@@ -29,7 +29,7 @@ test('device validator normalizes a complete Modbus TCP device with safe default
   });
   assert.deepEqual(result.data.polling, {
     enabled: true,
-    intervalMs: 60000,
+    intervalMs: 5000,
     jitterMs: 0,
   });
   assert.deepEqual(result.data.reconnect, {

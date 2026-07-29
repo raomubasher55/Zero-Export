@@ -64,7 +64,13 @@ class DeviceService {
 
   async create(input) {
     await this.assertProfileCanBeAssigned(input.registerProfileId);
-    return this.deviceRepository.createWithProfile(mapDevicePayload(input));
+    const payload = mapDevicePayload(input);
+    const pollingEnabled = input.polling?.enabled ?? true;
+    const deviceEnabled = input.isEnabled ?? true;
+    if (deviceEnabled && pollingEnabled && input.registerProfileId) {
+      payload.nextPollAt = new Date();
+    }
+    return this.deviceRepository.createWithProfile(payload);
   }
 
   async update(deviceId, input) {
@@ -82,6 +88,25 @@ class DeviceService {
     }
     if (input.reconnect) {
       payload.reconnect = { ...existingDevice.reconnect, ...input.reconnect };
+    }
+
+    const pollingConfigurationChanged =
+      input.polling !== undefined ||
+      input.isEnabled !== undefined ||
+      input.registerProfileId !== undefined ||
+      input.connection !== undefined ||
+      input.unitId !== undefined;
+    if (pollingConfigurationChanged) {
+      const effectivePolling = payload.polling || existingDevice.polling;
+      const effectiveEnabled = input.isEnabled ?? existingDevice.isEnabled;
+      const effectiveProfile =
+        input.registerProfileId !== undefined
+          ? input.registerProfileId
+          : existingDevice.registerProfile;
+      payload.nextPollAt =
+        effectiveEnabled && effectivePolling?.enabled && effectiveProfile
+          ? new Date()
+          : null;
     }
 
     const updatedDevice = await this.deviceRepository.updateByIdWithProfile(deviceId, payload);

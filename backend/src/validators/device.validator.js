@@ -62,7 +62,7 @@ const connectionSchema = z.discriminatedUnion('protocol', [tcpConnectionSchema, 
 const pollingSchema = z
   .object({
     enabled: z.boolean().default(true),
-    intervalMs: z.number().int().min(1000).max(86400000).default(60000),
+    intervalMs: z.number().int().min(1000).max(86400000).default(5000),
     jitterMs: z.number().int().min(0).max(300000).default(0),
   })
   .strict()
@@ -127,7 +127,7 @@ const createDeviceBodySchema = z
     unitId: z.number().int().min(1).max(247).default(1),
     connection: connectionSchema,
     registerProfileId: objectIdSchema.nullable().optional(),
-    polling: pollingSchema.default({ enabled: true, intervalMs: 60000, jitterMs: 0 }),
+    polling: pollingSchema.default({ enabled: true, intervalMs: 5000, jitterMs: 0 }),
     reconnect: reconnectSchema.default({ timeoutMs: 3000, retries: 2, retryDelayMs: 500 }),
     isEnabled: z.boolean().default(true),
     tags: tagsSchema.default([]),

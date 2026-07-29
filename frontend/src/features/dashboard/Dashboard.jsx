@@ -171,9 +171,26 @@ export function Dashboard({
               }
             />
             <KeyValue
+              label="Completed automatic polls"
+              value={scheduler?.completedPolls ?? 0}
+            />
+            <KeyValue
+              label="Successful / failed"
+              value={`${scheduler?.successfulPolls ?? 0} / ${scheduler?.failedPolls ?? 0}`}
+            />
+            <KeyValue
               label="Last cycle"
               value={formatRelative(scheduler?.lastCycleAt)}
             />
+            <KeyValue
+              label="Last automatic poll"
+              value={formatRelative(scheduler?.lastPollCompletedAt)}
+            />
+            {scheduler?.lastPollError && (
+              <div className="rounded-lg border border-amber-100 bg-amber-50 p-3 text-xs text-amber-700">
+                Last device failure: {scheduler.lastPollError.message}
+              </div>
+            )}
             {scheduler?.lastError && (
               <div className="rounded-lg border border-rose-100 bg-rose-50 p-3 text-xs text-rose-700">
                 {scheduler.lastError.message}

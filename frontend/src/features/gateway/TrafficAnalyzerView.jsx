@@ -117,7 +117,7 @@ export function TrafficAnalyzerView({ notify }) {
 
   useEffect(() => {
     if (paused) return undefined;
-    const interval = setInterval(() => load(), 2000);
+    const interval = setInterval(() => load(), 2500);
     return () => clearInterval(interval);
   }, [load, paused]);
 

@@ -275,7 +275,7 @@ baud, 8 data bits, 1 stop bit, and no parity. `unitId` is constrained to 1–247
   "registerProfileId": "507f1f77bcf86cd799439011",
   "polling": {
     "enabled": true,
-    "intervalMs": 60000,
+    "intervalMs": 5000,
     "jitterMs": 5000
   },
   "reconnect": {
@@ -377,9 +377,19 @@ The background scheduler begins after MongoDB is connected. It atomically claims
 due enabled devices with active polling and a register profile, polls at most
 `POLLING_CONCURRENCY` devices locally, and uses a MongoDB lease ID to avoid
 duplicate execution across application instances. `nextPollAt` includes each
-device’s configured interval and optional jitter. Ensure `POLLING_LEASE_MS` is
-longer than the worst-case Modbus operation duration for your device retry
-policy.
+device’s configured interval and optional jitter. New devices default to a
+5-second interval. Creating a poll-enabled device, assigning/changing its
+profile, enabling polling, changing its interval, or changing its endpoint
+schedules an immediate automatic poll, so an old `nextPollAt` cannot delay the
+new configuration. Ensure `POLLING_LEASE_MS` is longer than the worst-case
+Modbus operation duration for your device retry policy.
+
+The device telemetry page fetches new persisted values automatically every
+3–10 seconds (bounded according to the configured device interval), without
+triggering manual Modbus reads. The operations data refreshes quietly in the
+background as well. Scheduler status now distinguishes cycle activity from
+completed, successful, and failed automatic polls, making backend polling
+visible even when no operator presses **Poll now**.
 
 ### Modbus forwarding gateway
 

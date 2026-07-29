@@ -23,38 +23,48 @@ export function useOperationsData() {
     return () => clearTimeout(timeout);
   }, [toast]);
 
-  const refresh = useCallback(async ({ initial = false } = {}) => {
-    if (initial) setLoading(true);
-    else setRefreshing(true);
+  const refresh = useCallback(
+    async ({ initial = false, background = false } = {}) => {
+      if (initial) setLoading(true);
+      else if (!background) setRefreshing(true);
 
-    const [healthResult, devicesResult, profilesResult, schedulerResult] =
-      await Promise.allSettled([
-        api.getHealth(),
-        api.listDevices({ limit: 100 }),
-        api.listRegisterProfiles({ limit: 100 }),
-        api.getPollingStatus(),
-      ]);
+      const [healthResult, devicesResult, profilesResult, schedulerResult] =
+        await Promise.allSettled([
+          api.getHealth(),
+          api.listDevices({ limit: 100 }),
+          api.listRegisterProfiles({ limit: 100 }),
+          api.getPollingStatus(),
+        ]);
 
-    if (healthResult.status === "fulfilled") {
-      setHealth(healthResult.value);
-      setBackendError("");
-    } else {
-      setHealth(null);
-      setBackendError(getErrorMessage(healthResult.reason));
-    }
-    if (devicesResult.status === "fulfilled")
-      setDevices(devicesResult.value.data || []);
-    if (profilesResult.status === "fulfilled")
-      setProfiles(profilesResult.value.data || []);
-    if (schedulerResult.status === "fulfilled")
-      setScheduler(schedulerResult.value.data);
+      if (healthResult.status === "fulfilled") {
+        setHealth(healthResult.value);
+        setBackendError("");
+      } else {
+        setHealth(null);
+        setBackendError(getErrorMessage(healthResult.reason));
+      }
+      if (devicesResult.status === "fulfilled")
+        setDevices(devicesResult.value.data || []);
+      if (profilesResult.status === "fulfilled")
+        setProfiles(profilesResult.value.data || []);
+      if (schedulerResult.status === "fulfilled")
+        setScheduler(schedulerResult.value.data);
 
-    setLoading(false);
-    setRefreshing(false);
-  }, []);
+      setLoading(false);
+      if (!background) setRefreshing(false);
+    },
+    [],
+  );
 
   useEffect(() => {
     refresh({ initial: true });
+  }, [refresh]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      void refresh({ background: true });
+    }, 45000);
+    return () => clearInterval(interval);
   }, [refresh]);
 
   const perform = useCallback(
