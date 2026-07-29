@@ -5,8 +5,14 @@ import { AppShell } from "@/components/layout/AppShell";
 import { LoadingScreen, Toast } from "@/components/common/Feedback";
 import { DeviceDialog } from "@/features/devices/DeviceDialog";
 import { ProfileDialog } from "@/features/profiles/ProfileDialog";
+import {
+  downloadProfileBlob,
+  parseProfileFile,
+  profileFilename,
+} from "@/features/profiles/profileFiles";
 import { useOperationsData } from "@/hooks/useOperationsData";
 import { api } from "@/lib/api";
+import { getErrorMessage } from "@/lib/formatters";
 import { DashboardPage } from "@/pages/DashboardPage";
 import { DeviceMonitorPage } from "@/pages/DeviceMonitorPage";
 import { DevicesPage } from "@/pages/DevicesPage";
@@ -51,6 +57,64 @@ function App() {
           : api.createRegisterProfile(payload),
       profile ? "Register profile saved." : "Register profile created.",
     );
+  };
+
+  const exportProfiles = async (profile = null) => {
+    try {
+      const blob = await api.exportRegisterProfiles(profile?._id);
+      downloadProfileBlob(
+        blob,
+        profile ? profileFilename(profile) : "register-profiles.json",
+      );
+      data.notify(profile ? `Exported ${profile.name}.` : "Register profiles exported.");
+    } catch (exportError) {
+      data.notify(getErrorMessage(exportError), "error");
+      throw exportError;
+    }
+  };
+
+  const importProfiles = async (file) => {
+    try {
+      const document = await parseProfileFile(file);
+      const existingIdentifiers = new Set(
+        data.profiles.map((profile) => profile.identifier.toLowerCase()),
+      );
+      const conflicts = document.profiles.filter((profile) =>
+        existingIdentifiers.has(String(profile.identifier).toLowerCase()),
+      );
+      if (
+        conflicts.length > 0 &&
+        !window.confirm(
+          `${conflicts.length} profile identifier(s) already exist and will be updated: ${conflicts
+            .map((profile) => profile.identifier)
+            .join(", ")}. This immediately affects assigned devices and gateway mappings. Continue?`,
+        )
+      ) {
+        return { cancelled: true };
+      }
+
+      const summary = { total: 0, created: 0, updated: 0, skipped: 0 };
+      for (const profile of document.profiles) {
+        const response = await api.importRegisterProfiles({
+          format: document.format,
+          version: document.version,
+          conflictStrategy: "UPDATE",
+          profiles: [profile],
+        });
+        summary.total += response.data.total;
+        summary.created += response.data.created;
+        summary.updated += response.data.updated;
+        summary.skipped += response.data.skipped;
+      }
+      await data.refresh();
+      data.notify(
+        `Imported ${summary.total} profile(s): ${summary.created} created, ${summary.updated} updated.`,
+      );
+      return summary;
+    } catch (importError) {
+      data.notify(getErrorMessage(importError), "error");
+      throw importError;
+    }
   };
 
   const deleteDevice = async (device) => {
@@ -122,6 +186,8 @@ function App() {
                 onCreateProfile={createProfile}
                 onEditProfile={editProfile}
                 onDeleteProfile={deleteProfile}
+                onImportProfiles={importProfiles}
+                onExportProfiles={exportProfiles}
               />
             }
           />

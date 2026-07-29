@@ -1,4 +1,12 @@
-import { CirclePlus, Pencil, Trash2 } from "lucide-react";
+import { useRef, useState } from "react";
+import {
+  CirclePlus,
+  Download,
+  LoaderCircle,
+  Pencil,
+  Trash2,
+  Upload,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -10,7 +18,44 @@ import {
 } from "@/components/ui/card";
 import { EmptyState, KeyValue } from "@/components/common/Feedback";
 
-export function ProfilesView({ profiles, onCreate, onEdit, onDelete }) {
+export function ProfilesView({
+  profiles,
+  onCreate,
+  onEdit,
+  onDelete,
+  onImport,
+  onExport,
+}) {
+  const fileInputRef = useRef(null);
+  const [importing, setImporting] = useState(false);
+  const [exporting, setExporting] = useState("");
+
+  const importFile = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    setImporting(true);
+    try {
+      await onImport(file);
+    } catch {
+      // The application-level handler displays the API or file validation error.
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  const exportFile = async (profile = null) => {
+    const key = profile?._id || "all";
+    setExporting(key);
+    try {
+      await onExport(profile);
+    } catch {
+      // The application-level handler displays the export error.
+    } finally {
+      setExporting("");
+    }
+  };
+
   return (
     <div className="space-y-6">
       <section className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
@@ -26,11 +71,49 @@ export function ProfilesView({ profiles, onCreate, onEdit, onDelete }) {
             scaling rules.
           </p>
         </div>
-        <Button onClick={onCreate}>
-          <CirclePlus className="h-4 w-4" />
-          New profile
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".json,application/json"
+            className="hidden"
+            onChange={importFile}
+          />
+          <Button
+            variant="outline"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={importing || Boolean(exporting)}
+          >
+            {importing ? (
+              <LoaderCircle className="h-4 w-4 animate-spin" />
+            ) : (
+              <Upload className="h-4 w-4" />
+            )}
+            Import JSON
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => exportFile()}
+            disabled={profiles.length === 0 || importing || Boolean(exporting)}
+          >
+            {exporting === "all" ? (
+              <LoaderCircle className="h-4 w-4 animate-spin" />
+            ) : (
+              <Download className="h-4 w-4" />
+            )}
+            Export all
+          </Button>
+          <Button onClick={onCreate}>
+            <CirclePlus className="h-4 w-4" />
+            New profile
+          </Button>
+        </div>
       </section>
+      <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+        Import or export portable JSON files containing complete register addresses, data types,
+        byte/word order, scale, offset, units, writable flags, and profile metadata. Existing
+        identifiers can be updated after confirmation.
+      </div>
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {profiles.length === 0 ? (
           <Card className="md:col-span-2 xl:col-span-3">
@@ -83,6 +166,19 @@ export function ProfilesView({ profiles, onCreate, onEdit, onDelete }) {
                   >
                     <Pencil className="h-3.5 w-3.5" />
                     Edit
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => exportFile(profile)}
+                    disabled={importing || Boolean(exporting)}
+                  >
+                    {exporting === profile._id ? (
+                      <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Download className="h-3.5 w-3.5" />
+                    )}
+                    Export
                   </Button>
                   <Button
                     variant="ghost"

@@ -149,6 +149,31 @@ const createRegisterProfileBodySchema = z
   })
   .strict();
 
+const importRegisterProfilesBodySchema = z
+  .object({
+    format: z.literal('zero-export-register-profiles'),
+    version: z.literal(1),
+    conflictStrategy: z.enum(['UPDATE', 'SKIP', 'ERROR']).default('UPDATE'),
+    profiles: z
+      .array(createRegisterProfileBodySchema)
+      .min(1)
+      .max(100)
+      .superRefine((profiles, context) => {
+        const identifiers = new Set();
+        profiles.forEach((profile, index) => {
+          if (identifiers.has(profile.identifier)) {
+            context.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: [index, 'identifier'],
+              message: 'Profile identifiers must be unique within an import file.',
+            });
+          }
+          identifiers.add(profile.identifier);
+        });
+      }),
+  })
+  .strict();
+
 const updateRegisterProfileBodySchema = z
   .object({
     identifier: identifierSchema.optional(),
@@ -180,6 +205,7 @@ const listRegisterProfilesQuerySchema = paginationSchema
 
 module.exports = {
   createRegisterProfileBodySchema,
+  importRegisterProfilesBodySchema,
   updateRegisterProfileBodySchema,
   registerProfileIdParamSchema,
   listRegisterProfilesQuerySchema,

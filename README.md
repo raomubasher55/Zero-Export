@@ -193,6 +193,18 @@ Errors use a stable correlation-aware envelope:
 | `GET` | `/api/v1/register-profiles/:registerProfileId` | Retrieve one profile. |
 | `PATCH` | `/api/v1/register-profiles/:registerProfileId` | Update one or more mutable fields. `registers` replaces the complete map when supplied. |
 | `DELETE` | `/api/v1/register-profiles/:registerProfileId` | Delete a profile; returns `204`. Returns `409` if any device still references it. |
+| `GET` | `/api/v1/register-profiles/export` | Download all register profiles as one portable, versioned JSON file. |
+| `GET` | `/api/v1/register-profiles/:registerProfileId/export` | Download one profile as portable JSON. |
+| `POST` | `/api/v1/register-profiles/import` | Import 1–100 portable profiles using `UPDATE`, `SKIP`, or `ERROR` identifier-conflict handling. |
+
+The Register Profiles page has **Import JSON**, **Export all**, and per-profile
+**Export** actions. Exported files include profile identity/metadata and every
+register's area, address, data type/length, byte/word order, bit index, scale,
+offset, unit, group, writable/enabled state, and sort order. Server-managed IDs
+and timestamps are deliberately excluded so files can move safely between
+Zero Export installations. The importer also accepts one raw profile object or
+a plain array in the frontend and normalizes it into the versioned format.
+Existing identifiers are updated only after operator confirmation.
 
 A profile must contain at least one register. `identifier` is a unique lowercase
 machine key. Register `key` values are unique within a profile and become the
@@ -559,7 +571,8 @@ endpoint. It provides an operations dashboard for:
 
 - Backend/MongoDB health and polling-scheduler state.
 - Device and Register Profile CRUD, including TCP/RTU transport settings,
-  polling/retry policy, and editable register definitions.
+  polling/retry policy, editable register definitions, and portable JSON profile
+  import/export.
 - Device connection control, manual decoded polls, raw Modbus read/write tools,
   latest decoded values, and retained communication history.
 - A dedicated forwarding-gateway page for TCP/RTU slave endpoints, mirrored or

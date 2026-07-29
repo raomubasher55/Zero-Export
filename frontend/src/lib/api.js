@@ -101,6 +101,20 @@ export const api = {
 
   listRegisterProfiles: (query) => request(`/register-profiles${toQueryString(query)}`),
   getRegisterProfile: (profileId) => request(`/register-profiles/${profileId}`),
+  exportRegisterProfiles: async (profileId) => {
+    const path = profileId
+      ? `/register-profiles/${profileId}/export`
+      : '/register-profiles/export';
+    const response = await fetch(`${API_BASE_URL}${path}`);
+    if (!response.ok) {
+      throw new ApiError(`Profile export failed with status ${response.status}.`, {
+        status: response.status,
+      });
+    }
+    return response.blob();
+  },
+  importRegisterProfiles: (payload) =>
+    request('/register-profiles/import', { method: 'POST', body: payload }),
   createRegisterProfile: (payload) => request('/register-profiles', { method: 'POST', body: payload }),
   updateRegisterProfile: (profileId, payload) => request(`/register-profiles/${profileId}`, { method: 'PATCH', body: payload }),
   deleteRegisterProfile: (profileId) => request(`/register-profiles/${profileId}`, { method: 'DELETE' }),

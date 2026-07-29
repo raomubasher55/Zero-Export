@@ -6,6 +6,7 @@ const validateRequest = require('../middleware/validate-request');
 const asyncHandler = require('../utils/async-handler');
 const {
   createRegisterProfileBodySchema,
+  importRegisterProfilesBodySchema,
   listRegisterProfilesQuerySchema,
   registerProfileIdParamSchema,
   updateRegisterProfileBodySchema,
@@ -14,6 +15,13 @@ const {
 const router = express.Router();
 const registerProfileController = new RegisterProfileController();
 
+router.get('/export', asyncHandler(registerProfileController.exportAll));
+router.post(
+  '/import',
+  validateRequest({ body: importRegisterProfilesBodySchema }),
+  asyncHandler(registerProfileController.importFile),
+);
+
 router
   .route('/')
   .get(validateRequest({ query: listRegisterProfilesQuerySchema }), asyncHandler(registerProfileController.list))
@@ -21,6 +29,12 @@ router
     validateRequest({ body: createRegisterProfileBodySchema }),
     asyncHandler(registerProfileController.create),
   );
+
+router.get(
+  '/:registerProfileId/export',
+  validateRequest({ params: registerProfileIdParamSchema }),
+  asyncHandler(registerProfileController.exportById),
+);
 
 router
   .route('/:registerProfileId')

@@ -27,6 +27,8 @@ router.get('/', (_req, res) => {
       resources: {
         devices: '/api/v1/devices',
         registerProfiles: '/api/v1/register-profiles',
+        registerProfileImport: '/api/v1/register-profiles/import',
+        registerProfileExport: '/api/v1/register-profiles/export',
         deviceConnection: '/api/v1/devices/:deviceId/connection',
         modbusRead: '/api/v1/devices/:deviceId/modbus/read',
         modbusWrite: '/api/v1/devices/:deviceId/modbus/write',

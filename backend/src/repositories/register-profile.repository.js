@@ -12,6 +12,14 @@ class RegisterProfileRepository extends BaseRepository {
     super(RegisterProfile);
   }
 
+  async findAllForExport() {
+    return this.model.find({}).sort({ identifier: 1, _id: 1 }).lean().exec();
+  }
+
+  async findByIdentifier(identifier) {
+    return this.findOne({ identifier });
+  }
+
   async list({ page, limit, search, active, manufacturer, sortBy, sortOrder }) {
     const filter = {};
 

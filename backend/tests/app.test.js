@@ -46,6 +46,14 @@ test('GET /api/v1 advertises the versioned EMS domain resources', async () => {
   assert.equal(response.body.data.resources.gateway, '/api/v1/gateway');
   assert.equal(response.body.data.resources.gatewayTraffic, '/api/v1/gateway/traffic');
   assert.equal(response.body.data.resources.system, '/api/v1/system');
+  assert.equal(
+    response.body.data.resources.registerProfileImport,
+    '/api/v1/register-profiles/import',
+  );
+  assert.equal(
+    response.body.data.resources.registerProfileExport,
+    '/api/v1/register-profiles/export',
+  );
 });
 
 test('device routes reject malformed commands before accessing the database', async () => {
@@ -67,6 +75,17 @@ test('GET /api/v1/polling/status returns scheduler state without requiring a dev
   assert.equal(response.status, 200);
   assert.equal(response.body.success, true);
   assert.equal(typeof response.body.data.running, 'boolean');
+});
+
+test('register-profile import rejects invalid files before database access', async () => {
+  const response = await request('/api/v1/register-profiles/import', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ format: 'unknown', version: 1, profiles: [] }),
+  });
+
+  assert.equal(response.status, 422);
+  assert.equal(response.body.error.code, 'VALIDATION_ERROR');
 });
 
 test('gateway traffic analyzer is process-memory-only and available without database traffic storage', async () => {
