@@ -1,0 +1,92 @@
+'use strict';
+
+const assert = require('node:assert/strict');
+const http = require('node:http');
+const test = require('node:test');
+const app = require('../src/app');
+
+async function request(path, options = {}) {
+  const server = http.createServer(app);
+
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const { port } = server.address();
+
+  try {
+    const response = await fetch(`http://127.0.0.1:${port}${path}`, options);
+    const contentType = response.headers.get('content-type') || '';
+
+    return {
+      status: response.status,
+      headers: response.headers,
+      body: contentType.includes('application/json') ? await response.json() : undefined,
+    };
+  } finally {
+    await new Promise((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
+  }
+}
+
+test('GET /health returns a liveness response and a request ID', async () => {
+  const response = await request('/health');
+
+  assert.equal(response.status, 200);
+  assert.equal(response.body.success, true);
+  assert.equal(response.body.data.service, 'zero-export-modbus-core');
+  assert.match(response.headers.get('x-request-id'), /^[a-f0-9-]{36}$/);
+});
+
+test('GET /api/v1 advertises the versioned EMS domain resources', async () => {
+  const response = await request('/api/v1');
+
+  assert.equal(response.status, 200);
+  assert.equal(response.body.data.resources.devices, '/api/v1/devices');
+  assert.equal(response.body.data.resources.registerProfiles, '/api/v1/register-profiles');
+  assert.equal(response.body.data.resources.modbusRead, '/api/v1/devices/:deviceId/modbus/read');
+  assert.equal(response.body.data.resources.pollDevice, '/api/v1/devices/:deviceId/poll');
+  assert.equal(response.body.data.resources.latestValues, '/api/v1/devices/:deviceId/values');
+});
+
+test('device routes reject malformed commands before accessing the database', async () => {
+  const response = await request('/api/v1/devices', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ name: 'Missing required device configuration' }),
+  });
+
+  assert.equal(response.status, 422);
+  assert.equal(response.body.success, false);
+  assert.equal(response.body.error.code, 'VALIDATION_ERROR');
+  assert.ok(response.body.error.details.length > 0);
+});
+
+test('GET /api/v1/polling/status returns scheduler state without requiring a device query', async () => {
+  const response = await request('/api/v1/polling/status');
+
+  assert.equal(response.status, 200);
+  assert.equal(response.body.success, true);
+  assert.equal(typeof response.body.data.running, 'boolean');
+});
+
+test('Modbus command routes reject unsafe raw requests before accessing the database', async () => {
+  const response = await request('/api/v1/devices/507f1f77bcf86cd799439011/modbus/read', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      registerType: 'HOLDING_REGISTER',
+      address: 0,
+      quantity: 126,
+    }),
+  });
+
+  assert.equal(response.status, 422);
+  assert.equal(response.body.success, false);
+  assert.equal(response.body.error.code, 'VALIDATION_ERROR');
+});
+
+test('unknown paths receive the standardized not-found error contract', async () => {
+  const response = await request('/does-not-exist');
+
+  assert.equal(response.status, 404);
+  assert.equal(response.body.success, false);
+  assert.equal(response.body.error.code, 'NOT_FOUND');
+  assert.ok(response.body.error.requestId);
+});
