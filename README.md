@@ -408,8 +408,10 @@ endpoint. It provides an operations dashboard for:
 
 For a separately hosted backend, copy
 [`frontend/.env.example`](frontend/.env.example) to `frontend/.env` and set
-`VITE_API_BASE_URL` to the API's `/api/v1` base URL. In local development, the
-Vite proxy routes `/api` requests to `http://localhost:3001` automatically.
+`VITE_API_BASE_URL` to the API's `/api/v1` base URL. The health URL is inferred
+from that origin; set `VITE_HEALTH_URL` only when it is hosted elsewhere. In
+local development, the Vite proxy routes both `/api` and `/health` requests to
+`http://localhost:3001` automatically.
 
 ## Development convenience
 

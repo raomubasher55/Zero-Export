@@ -1,6 +1,8 @@
 import {
   Activity,
   AlertTriangle,
+  ChevronRight,
+  CirclePlus,
   Clock3,
   FileCog,
   Network,

@@ -1,4 +1,8 @@
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '/api/v1').replace(/\/$/, '');
+const HEALTH_URL = (
+  import.meta.env.VITE_HEALTH_URL ||
+  `${API_BASE_URL.replace(/\/api\/v1$/, '')}/health`
+).replace(/\/$/, '');
 
 export class ApiError extends Error {
   constructor(message, { status, code, details, requestId } = {}) {
@@ -54,7 +58,7 @@ async function request(path, { method = 'GET', body, signal } = {}) {
 
 export const api = {
   getHealth: async () => {
-    const response = await fetch('/health');
+    const response = await fetch(HEALTH_URL);
     const payload = await response.json().catch(() => null);
     if (!response.ok || !payload?.success) {
       throw new ApiError('Backend health endpoint is unavailable.', { status: response.status });
