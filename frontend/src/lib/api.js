@@ -68,6 +68,7 @@ export const api = {
 
   getApiInfo: () => request('/'),
   getPollingStatus: () => request('/polling/status'),
+  getSystemUsage: () => request('/system'),
 
   getGateway: () => request('/gateway'),
   updateGateway: (payload) => request('/gateway', { method: 'PUT', body: payload }),

@@ -13,6 +13,7 @@ import { DevicesPage } from "@/pages/DevicesPage";
 import { GatewayPage } from "@/pages/GatewayPage";
 import { GatewayTrafficPage } from "@/pages/GatewayTrafficPage";
 import { ProfilesPage } from "@/pages/ProfilesPage";
+import { SystemPage } from "@/pages/SystemPage";
 
 function App() {
   const navigate = useNavigate();
@@ -129,6 +130,7 @@ function App() {
             path="/gateway/traffic"
             element={<GatewayTrafficPage data={data} />}
           />
+          <Route path="/system" element={<SystemPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       )}

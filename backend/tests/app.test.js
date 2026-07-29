@@ -45,6 +45,7 @@ test('GET /api/v1 advertises the versioned EMS domain resources', async () => {
   assert.equal(response.body.data.resources.latestValues, '/api/v1/devices/:deviceId/values');
   assert.equal(response.body.data.resources.gateway, '/api/v1/gateway');
   assert.equal(response.body.data.resources.gatewayTraffic, '/api/v1/gateway/traffic');
+  assert.equal(response.body.data.resources.system, '/api/v1/system');
 });
 
 test('device routes reject malformed commands before accessing the database', async () => {
@@ -76,6 +77,18 @@ test('gateway traffic analyzer is process-memory-only and available without data
   assert.equal(response.body.data.settings.inMemoryOnly, true);
   assert.equal(response.body.data.settings.persistence, 'NONE');
   assert.ok(Array.isArray(response.body.data.events));
+});
+
+test('system endpoint returns live process-memory-only Orange Pi diagnostics', async () => {
+  const response = await request('/api/v1/system');
+
+  assert.equal(response.status, 200);
+  assert.equal(response.body.success, true);
+  assert.equal(response.body.data.live, true);
+  assert.equal(response.body.data.persistence, 'NONE');
+  assert.ok(response.body.data.identity.logicalCores >= 1);
+  assert.ok(response.body.data.memory.totalBytes > 0);
+  assert.ok(Array.isArray(response.body.data.network));
 });
 
 test('gateway route rejects unsafe configuration before accessing the database', async () => {

@@ -105,6 +105,21 @@ repository/model, route, and validation boundaries.
   explicitly diagnostic candidates because Modbus does not transmit encoding
   metadata.
 
+### Step 7 — live Orange Pi system diagnostics
+
+- A process-local system monitor reports board/device-tree identity, Armbian or
+  Linux distribution, kernel, architecture, CPU model, core count, and uptime.
+- Live CPU/per-core utilization, Linux load average, current CPU frequency and
+  governor, memory/cache/swap, thermal zones, filesystem capacity, and network
+  interface counters/rates are exposed through `GET /api/v1/system`.
+- The Node.js backend process reports its PID, uptime, CPU, resident memory,
+  V8 heap use/limit, external memory, and runtime environment without exposing
+  environment-variable values.
+- Resource threshold warnings identify high CPU/load, memory pressure, board
+  temperature, full storage, down configured links, and high V8 heap use.
+- The routed `/system` page refreshes live data every three seconds. System
+  samples are not stored in MongoDB or written to monitoring files.
+
 ## Prerequisites
 
 - Node.js **20.11+** (Node 22 LTS recommended)
@@ -431,6 +446,38 @@ offset, engineering unit, and import/export sign are never claimed as wire
 facts; the UI labels them as configured mapping semantics or candidate
 interpretations requiring manual confirmation.
 
+### Orange Pi system diagnostics
+
+| Method | Endpoint | Description |
+| --- | --- | --- |
+| `GET` | `/api/v1/system` | Return one live host/process snapshot for the Orange Pi system page. |
+
+The endpoint uses Node.js operating-system APIs plus read-only Linux interfaces
+such as `/proc/meminfo`, `/proc/mounts`, `/proc/cpuinfo`,
+`/proc/device-tree/model`, `/sys/class/thermal`, `/sys/class/net`, and CPU
+frequency sysfs entries. Missing kernel interfaces are reported as unavailable
+instead of failing the request, so development on non-Orange-Pi hosts remains
+possible.
+
+The response includes:
+
+- Orange Pi model, hostname, OS distribution, kernel, architecture, CPU model,
+  core count, board hardware/revision, boot time, and uptime.
+- Overall/per-core CPU percentage, 1/5/15-minute load, per-core frequency,
+  configured minimum/maximum frequency, and scaling governor.
+- Total/used/available/free memory, Linux buffers/cache, and swap usage.
+- Every available thermal zone and maximum board temperature.
+- Root/boot/removable mounted filesystem capacity and usage.
+- Interface state, IP/CIDR/MAC addresses, negotiated speed, total RX/TX bytes,
+  and sampled RX/TX bytes per second.
+- Backend PID, process uptime/CPU, RSS, heap, heap limit, external memory, and
+  array-buffer memory.
+
+No time-series history is retained: each request returns a current snapshot and
+only the previous CPU/network counters are kept in process memory to calculate
+rates. The `/system` React page polls every three seconds and all samples vanish
+when the page/backend stops.
+
 ## Configuration
 
 Copy [`backend/.env.example`](backend/.env.example) to `backend/.env`. It
@@ -520,14 +567,16 @@ endpoint. It provides an operations dashboard for:
 - An in-memory inverter request analyzer with live traffic, request patterns,
   address heat map, sessions, raw frame inspection, mapping suggestions, and
   candidate data-type/order previews.
+- A detailed `/system` Orange Pi page for live board identity, CPU/load/frequency,
+  memory/swap, thermal zones, storage, network, and backend process usage.
 - React Router navigation with bookmarkable operations, device, profile,
-  per-device telemetry, gateway, and `/gateway/traffic` analyzer URLs.
+  per-device telemetry, gateway, `/gateway/traffic`, and `/system` URLs.
 - Responsive fleet/profile views with backend validation errors and request
   failures surfaced in the UI.
 
 When serving the production SPA, configure the web server to rewrite unknown UI
-paths such as `/devices/:deviceId` and `/gateway` to `index.html`. API and health
-paths must remain routed to the backend.
+paths such as `/devices/:deviceId`, `/gateway`, and `/system` to `index.html`.
+API and health paths must remain routed to the backend.
 
 For a separately hosted backend, copy
 [`frontend/.env.example`](frontend/.env.example) to `frontend/.env` and set
