@@ -1,0 +1,73 @@
+'use strict';
+
+const MODBUS_PROTOCOLS = Object.freeze({
+  TCP: 'TCP',
+  RTU: 'RTU',
+});
+
+const SERIAL_PARITIES = Object.freeze({
+  NONE: 'none',
+  EVEN: 'even',
+  ODD: 'odd',
+});
+
+const REGISTER_TYPES = Object.freeze({
+  HOLDING: 'HOLDING_REGISTER',
+  INPUT: 'INPUT_REGISTER',
+  COIL: 'COIL',
+  DISCRETE_INPUT: 'DISCRETE_INPUT',
+});
+
+const REGISTER_DATA_TYPES = Object.freeze({
+  INT16: 'INT16',
+  UINT16: 'UINT16',
+  INT32: 'INT32',
+  UINT32: 'UINT32',
+  FLOAT32: 'FLOAT32',
+  FLOAT64: 'FLOAT64',
+  STRING: 'STRING',
+  BIT: 'BIT',
+});
+
+const BYTE_ORDERS = Object.freeze({
+  BIG_ENDIAN: 'BIG_ENDIAN',
+  LITTLE_ENDIAN: 'LITTLE_ENDIAN',
+});
+
+const WORD_ORDERS = Object.freeze({
+  BIG_ENDIAN: 'BIG_ENDIAN',
+  LITTLE_ENDIAN: 'LITTLE_ENDIAN',
+});
+
+const DEVICE_STATUSES = Object.freeze({
+  UNKNOWN: 'UNKNOWN',
+  ONLINE: 'ONLINE',
+  OFFLINE: 'OFFLINE',
+  TIMEOUT: 'TIMEOUT',
+  ERROR: 'ERROR',
+});
+
+const MODBUS_PROTOCOL_VALUES = Object.freeze(Object.values(MODBUS_PROTOCOLS));
+const SERIAL_PARITY_VALUES = Object.freeze(Object.values(SERIAL_PARITIES));
+const REGISTER_TYPE_VALUES = Object.freeze(Object.values(REGISTER_TYPES));
+const REGISTER_DATA_TYPE_VALUES = Object.freeze(Object.values(REGISTER_DATA_TYPES));
+const BYTE_ORDER_VALUES = Object.freeze(Object.values(BYTE_ORDERS));
+const WORD_ORDER_VALUES = Object.freeze(Object.values(WORD_ORDERS));
+const DEVICE_STATUS_VALUES = Object.freeze(Object.values(DEVICE_STATUSES));
+
+module.exports = {
+  MODBUS_PROTOCOLS,
+  MODBUS_PROTOCOL_VALUES,
+  SERIAL_PARITIES,
+  SERIAL_PARITY_VALUES,
+  REGISTER_TYPES,
+  REGISTER_TYPE_VALUES,
+  REGISTER_DATA_TYPES,
+  REGISTER_DATA_TYPE_VALUES,
+  BYTE_ORDERS,
+  BYTE_ORDER_VALUES,
+  WORD_ORDERS,
+  WORD_ORDER_VALUES,
+  DEVICE_STATUSES,
+  DEVICE_STATUS_VALUES,
+};
