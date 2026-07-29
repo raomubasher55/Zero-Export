@@ -8,6 +8,7 @@ const { DevicePollingService } = require('../src/services/device-polling.service
 
 test('DevicePollingService reads a planned profile, decodes values, persists latest values, and records success', async () => {
   const captured = {
+    gateway: [],
     latest: [],
     logs: [],
     success: [],
@@ -68,6 +69,9 @@ test('DevicePollingService reads a planned profile, decodes values, persists lat
     latestValueRepository: {
       bulkUpsert: async (...args) => captured.latest.push(args),
     },
+    gatewayRuntime: {
+      publish: (...args) => captured.gateway.push(args),
+    },
     communicationLogRepository: {
       create: async (entry) => captured.logs.push(entry),
     },
@@ -88,6 +92,15 @@ test('DevicePollingService reads a planned profile, decodes values, persists lat
     ],
   );
   assert.equal(captured.success.length, 1);
+  assert.equal(captured.gateway.length, 1);
+  assert.equal(captured.gateway[0][0], device._id);
+  assert.deepEqual(
+    captured.gateway[0][1].map((value) => ({ key: value.registerKey, value: value.value })),
+    [
+      { key: 'voltage', value: 230 },
+      { key: 'current', value: 12.34 },
+    ],
+  );
   assert.equal(captured.logs[0].outcome, 'SUCCESS');
 });
 

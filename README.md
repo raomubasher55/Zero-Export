@@ -68,8 +68,24 @@ repository/model, route, and validation boundaries.
 - Device poll statistics, next due timestamp, status, last poll, last
   communication, and errors are updated atomically after each poll.
 
-The next increment can build reporting/history and higher-level EMS analytics on
-the durable latest values and communication records now produced by the core.
+### Step 5 — Orange Pi Modbus forwarding gateway and routed UI
+
+- A persisted forwarding map publishes polled engineering values through a
+  process-local Modbus TCP server, Modbus RTU slave, or both at the same time.
+- Every output mapping selects a source device/register and independently
+  defines its slave area, zero-based address, data type/length, byte/word order,
+  scale, offset, unit, enabled state, and write-through permission.
+- Source settings can be mirrored and then edited. Runtime encoding reverses
+  scaling and ordering so downstream FC1/FC2/FC3/FC4 reads receive valid raw
+  Modbus bits/words.
+- Optional FC5/FC6/FC15/FC16 write-through decodes the slave value into an
+  engineering value, applies the source profile’s inverse conversion, and
+  writes the resulting raw value to a source coil or holding register.
+- Gateway configuration, lifecycle, endpoint state, mapping freshness, and
+  errors are available through REST and a dedicated React page.
+- The React console now uses React Router pages for `/`, `/devices`,
+  `/devices/:deviceId`, `/profiles`, and `/gateway` instead of local single-view
+  state.
 
 ## Prerequisites
 
@@ -306,7 +322,7 @@ with only some decoding failures are `PARTIAL_SUCCESS`: valid values remain
 available while failed keys are recorded in the communication log.
 
 `CommunicationLog` records include operation (`POLL`, `CONNECT`, `READ`, or
-`WRITE`), source (`SCHEDULER`, `MANUAL`, or `API`), outcome, duration, batch and
+`WRITE`), source (`SCHEDULER`, `MANUAL`, `API`, or `GATEWAY`), outcome, duration, batch and
 register counts, decoded-count metadata, and safe failure data. Logs expire via
 a MongoDB TTL index after `COMMUNICATION_LOG_RETENTION_DAYS` (90 days by
 default).
@@ -318,6 +334,57 @@ duplicate execution across application instances. `nextPollAt` includes each
 device’s configured interval and optional jitter. Ensure `POLLING_LEASE_MS` is
 longer than the worst-case Modbus operation duration for your device retry
 policy.
+
+### Modbus forwarding gateway
+
+| Method | Endpoint | Description |
+| --- | --- | --- |
+| `GET` | `/api/v1/gateway` | Get persisted gateway configuration and process-local runtime status. |
+| `PUT` | `/api/v1/gateway` | Replace the TCP/RTU endpoint and forwarding-map configuration; restarts it when `enabled` is true. |
+| `POST` | `/api/v1/gateway/start` | Start the saved gateway configuration. |
+| `POST` | `/api/v1/gateway/stop` | Stop both slave endpoints and persist the disabled state. |
+
+The downstream function code is selected by the output memory area:
+
+| Output area | Downstream read | Downstream write |
+| --- | --- | --- |
+| `COIL` | FC01 | FC05 / FC15 when writable |
+| `DISCRETE_INPUT` | FC02 | Read-only |
+| `HOLDING_REGISTER` | FC03 | FC06 / FC16 when writable |
+| `INPUT_REGISTER` | FC04 | Read-only |
+
+A mapping publishes the latest engineering value using the output conversion:
+
+```text
+slaveRaw = (engineeringValue - outputOffset) / outputScale
+```
+
+A downstream write performs both conversions before contacting the original
+source device:
+
+```text
+engineeringValue = slaveRaw × outputScale + outputOffset
+sourceRaw = (engineeringValue - sourceOffset) / sourceScale
+```
+
+Integer output/source types must represent the converted value without a
+fraction. Byte order, word order, string length, and bit index are applied in
+both directions. Write-through is rejected unless the output mapping is a coil
+or holding register **and** the selected source profile definition is also
+marked writable in a coil or holding-register area.
+
+For an Orange Pi with two RS-485 adapters, configure the source Device as an RTU
+master on a path such as `/dev/ttyUSB0`, and configure the gateway RTU slave on a
+different path such as `/dev/ttyUSB1`. Never point both roles at the same serial
+device. For TCP, the default slave listener is `0.0.0.0:1502`; privileged port
+502 may require `CAP_NET_BIND_SERVICE` or a reverse/port-forwarding rule. TCP and
+RTU can run together and expose the same in-memory map and unit ID.
+
+The slave map updates after every successful source poll. Therefore, choose a
+source polling interval that meets downstream freshness requirements. A restart
+seeds the map from MongoDB `LatestValue` records before accepting requests. A
+mapped address with no current source value returns Modbus exception 04 instead
+of silently returning a misleading zero.
 
 ## Configuration
 
@@ -403,8 +470,16 @@ endpoint. It provides an operations dashboard for:
   polling/retry policy, and editable register definitions.
 - Device connection control, manual decoded polls, raw Modbus read/write tools,
   latest decoded values, and retained communication history.
+- A dedicated forwarding-gateway page for TCP/RTU slave endpoints, mirrored or
+  custom output mappings, function-code visibility, and guarded write-through.
+- React Router navigation with bookmarkable operations, device, profile,
+  per-device telemetry, and gateway URLs.
 - Responsive fleet/profile views with backend validation errors and request
   failures surfaced in the UI.
+
+When serving the production SPA, configure the web server to rewrite unknown UI
+paths such as `/devices/:deviceId` and `/gateway` to `index.html`. API and health
+paths must remain routed to the backend.
 
 For a separately hosted backend, copy
 [`frontend/.env.example`](frontend/.env.example) to `frontend/.env` and set

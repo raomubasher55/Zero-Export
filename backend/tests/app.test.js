@@ -43,6 +43,7 @@ test('GET /api/v1 advertises the versioned EMS domain resources', async () => {
   assert.equal(response.body.data.resources.modbusRead, '/api/v1/devices/:deviceId/modbus/read');
   assert.equal(response.body.data.resources.pollDevice, '/api/v1/devices/:deviceId/poll');
   assert.equal(response.body.data.resources.latestValues, '/api/v1/devices/:deviceId/values');
+  assert.equal(response.body.data.resources.gateway, '/api/v1/gateway');
 });
 
 test('device routes reject malformed commands before accessing the database', async () => {
@@ -64,6 +65,30 @@ test('GET /api/v1/polling/status returns scheduler state without requiring a dev
   assert.equal(response.status, 200);
   assert.equal(response.body.success, true);
   assert.equal(typeof response.body.data.running, 'boolean');
+});
+
+test('gateway route rejects unsafe configuration before accessing the database', async () => {
+  const response = await request('/api/v1/gateway', {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      enabled: true,
+      unitId: 1,
+      tcp: { enabled: false, host: '0.0.0.0', port: 1502 },
+      rtu: {
+        enabled: false,
+        serialPath: '/dev/ttyUSB1',
+        baudRate: 9600,
+        dataBits: 8,
+        stopBits: 1,
+        parity: 'none',
+      },
+      mappings: [],
+    }),
+  });
+
+  assert.equal(response.status, 422);
+  assert.equal(response.body.error.code, 'VALIDATION_ERROR');
 });
 
 test('Modbus command routes reject unsafe raw requests before accessing the database', async () => {

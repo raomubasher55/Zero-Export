@@ -3,6 +3,7 @@
 const { disconnectDatabase, connectDatabase } = require('../config/database');
 const logger = require('../config/logger');
 const Device = require('../models/device.model');
+const GatewayConfiguration = require('../models/gateway-configuration.model');
 const { LatestValue } = require('../models/latest-value.model');
 const { CommunicationLog } = require('../models/communication-log.model');
 const RegisterProfile = require('../models/register-profile.model');
@@ -10,7 +11,7 @@ const RegisterProfile = require('../models/register-profile.model');
 async function createIndexes() {
   await connectDatabase();
 
-  const models = [Device, RegisterProfile, LatestValue, CommunicationLog];
+  const models = [Device, RegisterProfile, LatestValue, CommunicationLog, GatewayConfiguration];
   const created = await Promise.all(
     models.map(async (model) => ({
       model: model.modelName,

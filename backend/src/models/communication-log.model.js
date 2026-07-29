@@ -20,6 +20,7 @@ const COMMUNICATION_SOURCES = Object.freeze({
   SCHEDULER: 'SCHEDULER',
   MANUAL: 'MANUAL',
   API: 'API',
+  GATEWAY: 'GATEWAY',
 });
 
 const communicationLogSchema = new mongoose.Schema(

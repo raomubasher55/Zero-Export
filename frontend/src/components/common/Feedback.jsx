@@ -32,12 +32,13 @@ export function ErrorBanner({ message }) {
   ) : null;
 }
 
-export function EmptyState({ title, description }) {
+export function EmptyState({ title, description, action }) {
   return (
     <div className="flex min-h-48 flex-col items-center justify-center px-6 py-10 text-center">
       <Database className="h-7 w-7 text-slate-300" />
       <h3 className="mt-3 font-semibold text-slate-700">{title}</h3>
       <p className="mt-1 max-w-md text-sm text-slate-500">{description}</p>
+      {action && <div className="mt-4">{action}</div>}
     </div>
   );
 }

@@ -120,7 +120,7 @@ class ModbusOperationService {
     return connection;
   }
 
-  async read(deviceId, request) {
+  async read(deviceId, request, source = COMMUNICATION_SOURCES.API) {
     const device = await this.getEnabledDevice(deviceId);
     const startedAt = process.hrtime.bigint();
 
@@ -147,6 +147,7 @@ class ModbusOperationService {
       await this.runtimeService.markOnline(device._id);
       await this.writeCommunicationLog({
         device,
+        source,
         operation: COMMUNICATION_OPERATIONS.READ,
         outcome: COMMUNICATION_OUTCOMES.SUCCESS,
         durationMs: elapsedMs,
@@ -166,6 +167,7 @@ class ModbusOperationService {
       await this.persistFailure(device._id, error);
       await this.writeCommunicationLog({
         device,
+        source,
         operation: COMMUNICATION_OPERATIONS.READ,
         outcome: COMMUNICATION_OUTCOMES.FAILURE,
         durationMs: operationDurationMs(startedAt),
@@ -177,7 +179,7 @@ class ModbusOperationService {
     }
   }
 
-  async write(deviceId, request) {
+  async write(deviceId, request, source = COMMUNICATION_SOURCES.API) {
     const device = await this.getEnabledDevice(deviceId);
     const startedAt = process.hrtime.bigint();
 
@@ -198,6 +200,7 @@ class ModbusOperationService {
       await this.runtimeService.markOnline(device._id);
       await this.writeCommunicationLog({
         device,
+        source,
         operation: COMMUNICATION_OPERATIONS.WRITE,
         outcome: COMMUNICATION_OUTCOMES.SUCCESS,
         durationMs: elapsedMs,
@@ -216,6 +219,7 @@ class ModbusOperationService {
       await this.persistFailure(device._id, error);
       await this.writeCommunicationLog({
         device,
+        source,
         operation: COMMUNICATION_OPERATIONS.WRITE,
         outcome: COMMUNICATION_OUTCOMES.FAILURE,
         durationMs: operationDurationMs(startedAt),
@@ -250,7 +254,7 @@ class ModbusOperationService {
       await this.communicationLogRepository.create({
         device: entry.device._id,
         operation: entry.operation,
-        source: COMMUNICATION_SOURCES.API,
+        source: entry.source || COMMUNICATION_SOURCES.API,
         outcome: entry.outcome,
         durationMs: entry.durationMs,
         request: {

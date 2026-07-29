@@ -1,18 +1,21 @@
 import { useState } from "react";
 import { AlertTriangle } from "lucide-react";
+import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { AppShell } from "@/components/layout/AppShell";
 import { LoadingScreen, Toast } from "@/components/common/Feedback";
-import { Dashboard } from "@/features/dashboard/Dashboard";
 import { DeviceDialog } from "@/features/devices/DeviceDialog";
-import { DeviceMonitor } from "@/features/devices/DeviceMonitor";
-import { DevicesView } from "@/features/devices/DevicesView";
 import { ProfileDialog } from "@/features/profiles/ProfileDialog";
-import { ProfilesView } from "@/features/profiles/ProfilesView";
 import { useOperationsData } from "@/hooks/useOperationsData";
 import { api } from "@/lib/api";
+import { DashboardPage } from "@/pages/DashboardPage";
+import { DeviceMonitorPage } from "@/pages/DeviceMonitorPage";
+import { DevicesPage } from "@/pages/DevicesPage";
+import { GatewayPage } from "@/pages/GatewayPage";
+import { ProfilesPage } from "@/pages/ProfilesPage";
 
 function App() {
-  const [activeView, setActiveView] = useState("dashboard");
+  const navigate = useNavigate();
+  const location = useLocation();
   const [deviceDialog, setDeviceDialog] = useState({
     open: false,
     device: null,
@@ -21,18 +24,12 @@ function App() {
     open: false,
     profile: null,
   });
-  const [monitorDevice, setMonitorDevice] = useState(null);
   const data = useOperationsData();
 
-  const navigate = (view) => {
-    setActiveView(view);
-    setMonitorDevice(null);
-  };
-
-  const openMonitor = (device) => {
-    setMonitorDevice(device);
-    setActiveView("monitor");
-  };
+  const createDevice = () => setDeviceDialog({ open: true, device: null });
+  const editDevice = (device) => setDeviceDialog({ open: true, device });
+  const createProfile = () => setProfileDialog({ open: true, profile: null });
+  const editProfile = (profile) => setProfileDialog({ open: true, profile });
 
   const saveDevice = async (payload, device) => {
     await data.perform(
@@ -62,7 +59,7 @@ function App() {
     )
       return;
     await data.perform(() => api.deleteDevice(device._id), "Device deleted.");
-    if (monitorDevice?._id === device._id) navigate("devices");
+    if (location.pathname === `/devices/${device._id}`) navigate("/devices");
   };
 
   const deleteProfile = async (profile) => {
@@ -78,15 +75,8 @@ function App() {
     );
   };
 
-  const currentMonitorDevice = monitorDevice
-    ? data.devices.find((device) => device._id === monitorDevice._id) ||
-      monitorDevice
-    : null;
-
   return (
     <AppShell
-      activeView={activeView}
-      onNavigate={navigate}
       health={data.health}
       scheduler={data.scheduler}
       refreshing={data.refreshing}
@@ -105,57 +95,37 @@ function App() {
       {data.loading ? (
         <LoadingScreen />
       ) : (
-        <>
-          {activeView === "dashboard" && (
-            <Dashboard
-              stats={data.stats}
-              devices={data.devices}
-              scheduler={data.scheduler}
-              onOpenDevice={openMonitor}
-              onCreate={() => setDeviceDialog({ open: true, device: null })}
-            />
-          )}
-          {activeView === "devices" && (
-            <DevicesView
-              devices={data.filteredDevices}
-              profiles={data.profiles}
-              search={data.deviceSearch}
-              onSearch={data.setDeviceSearch}
-              onCreate={() => setDeviceDialog({ open: true, device: null })}
-              onEdit={(device) => setDeviceDialog({ open: true, device })}
-              onDelete={deleteDevice}
-              onOpen={openMonitor}
-              onConnect={(device) =>
-                data.perform(
-                  () => api.connectDevice(device._id),
-                  `${device.name} connected.`,
-                )
-              }
-              onPoll={(device) =>
-                data.perform(
-                  () => api.pollDevice(device._id),
-                  `${device.name} poll completed.`,
-                )
-              }
-            />
-          )}
-          {activeView === "profiles" && (
-            <ProfilesView
-              profiles={data.profiles}
-              onCreate={() => setProfileDialog({ open: true, profile: null })}
-              onEdit={(profile) => setProfileDialog({ open: true, profile })}
-              onDelete={deleteProfile}
-            />
-          )}
-          {activeView === "monitor" && currentMonitorDevice && (
-            <DeviceMonitor
-              device={currentMonitorDevice}
-              onBack={() => navigate("devices")}
-              onRefresh={data.refresh}
-              notify={data.notify}
-            />
-          )}
-        </>
+        <Routes>
+          <Route
+            path="/"
+            element={<DashboardPage data={data} onCreateDevice={createDevice} />}
+          />
+          <Route
+            path="/devices"
+            element={
+              <DevicesPage
+                data={data}
+                onCreateDevice={createDevice}
+                onEditDevice={editDevice}
+                onDeleteDevice={deleteDevice}
+              />
+            }
+          />
+          <Route path="/devices/:deviceId" element={<DeviceMonitorPage data={data} />} />
+          <Route
+            path="/profiles"
+            element={
+              <ProfilesPage
+                data={data}
+                onCreateProfile={createProfile}
+                onEditProfile={editProfile}
+                onDeleteProfile={deleteProfile}
+              />
+            }
+          />
+          <Route path="/gateway" element={<GatewayPage data={data} />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
       )}
 
       <DeviceDialog

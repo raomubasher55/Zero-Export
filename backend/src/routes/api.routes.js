@@ -6,6 +6,7 @@ const deviceRoutes = require('./device.routes');
 const modbusRoutes = require('./modbus.routes');
 const monitoringRoutes = require('./monitoring.routes');
 const devicePollingRoutes = require('./device-polling.routes');
+const gatewayRoutes = require('./gateway.routes');
 const pollingRoutes = require('./polling.routes');
 const registerProfileRoutes = require('./register-profile.routes');
 
@@ -31,6 +32,7 @@ router.get('/', (_req, res) => {
         pollDevice: '/api/v1/devices/:deviceId/poll',
         latestValues: '/api/v1/devices/:deviceId/values',
         communicationLogs: '/api/v1/devices/:deviceId/communication-logs',
+        gateway: '/api/v1/gateway',
         pollingStatus: '/api/v1/polling/status',
       },
     },
@@ -41,6 +43,7 @@ router.use('/devices', deviceRoutes);
 router.use('/devices', modbusRoutes);
 router.use('/devices', devicePollingRoutes);
 router.use('/devices', monitoringRoutes);
+router.use('/gateway', gatewayRoutes);
 router.use('/polling', pollingRoutes);
 router.use('/register-profiles', registerProfileRoutes);
 

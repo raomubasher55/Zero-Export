@@ -11,6 +11,7 @@ const {
   COMMUNICATION_OUTCOMES,
   COMMUNICATION_SOURCES,
 } = require('../models/communication-log.model');
+const { modbusGatewayRuntime } = require('../gateway/modbus-gateway-runtime');
 const { modbusConnectionManager } = require('../modbus/connection-manager');
 const { isTimeoutError, toTransportError } = require('../modbus/modbus-error');
 const { decodeRegister } = require('../modbus/register-decoder');
@@ -57,6 +58,7 @@ class DevicePollingService {
     this.latestValueRepository = options.latestValueRepository || new LatestValueRepository();
     this.communicationLogRepository = options.communicationLogRepository || new CommunicationLogRepository();
     this.connectionManager = options.connectionManager || modbusConnectionManager;
+    this.gatewayRuntime = options.gatewayRuntime || modbusGatewayRuntime;
     this.logger = options.logger || logger;
     this.leaseMs = options.leaseMs || config.polling.leaseMs;
     this.random = options.random || Math.random;
@@ -151,6 +153,10 @@ class DevicePollingService {
       }
 
       await this.latestValueRepository.bulkUpsert(device, profile, values, polledAt);
+      this.gatewayRuntime.publish(
+        device._id,
+        values.map((value) => ({ ...value, sampledAt: polledAt })),
+      );
 
       const completedAt = new Date();
       const elapsedMs = durationMs(startedAt);

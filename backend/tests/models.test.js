@@ -3,6 +3,7 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 const Device = require('../src/models/device.model');
+const GatewayConfiguration = require('../src/models/gateway-configuration.model');
 const RegisterProfile = require('../src/models/register-profile.model');
 
 test('Device model enforces protocol-specific transport fields', async () => {
@@ -48,5 +49,31 @@ test('RegisterProfile model rejects register ranges exceeding the Modbus address
   await assert.rejects(
     profile.validate(),
     (error) => error.name === 'ValidationError' && Boolean(error.errors['registers.0.address']),
+  );
+});
+
+test('GatewayConfiguration model rejects overlapping enabled slave register ranges', async () => {
+  const baseMapping = {
+    name: 'Power',
+    sourceDeviceId: '507f1f77bcf86cd799439011',
+    sourceRegisterKey: 'power',
+    registerType: 'HOLDING_REGISTER',
+    dataType: 'UINT32',
+    length: 2,
+    scaleFactor: 1,
+    offset: 0,
+    enabled: true,
+  };
+  const configuration = new GatewayConfiguration({
+    enabled: true,
+    mappings: [
+      { ...baseMapping, key: 'power_1', address: 100 },
+      { ...baseMapping, key: 'power_2', address: 101 },
+    ],
+  });
+
+  await assert.rejects(
+    configuration.validate(),
+    (error) => error.name === 'ValidationError' && Boolean(error.errors['mappings.1.address']),
   );
 });

@@ -68,6 +68,22 @@ class LatestValueRepository extends BaseRepository {
   async findByDeviceAndKey(deviceId, registerKey) {
     return this.model.findOne({ device: deviceId, registerKey }).lean().exec();
   }
+
+  async findForSources(sources) {
+    if (sources.length === 0) {
+      return [];
+    }
+
+    return this.model
+      .find({
+        $or: sources.map((source) => ({
+          device: source.deviceId,
+          registerKey: source.registerKey,
+        })),
+      })
+      .lean()
+      .exec();
+  }
 }
 
 module.exports = LatestValueRepository;

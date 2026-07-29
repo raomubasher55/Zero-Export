@@ -69,6 +69,11 @@ export const api = {
   getApiInfo: () => request('/'),
   getPollingStatus: () => request('/polling/status'),
 
+  getGateway: () => request('/gateway'),
+  updateGateway: (payload) => request('/gateway', { method: 'PUT', body: payload }),
+  startGateway: () => request('/gateway/start', { method: 'POST' }),
+  stopGateway: () => request('/gateway/stop', { method: 'POST' }),
+
   listDevices: (query) => request(`/devices${toQueryString(query)}`),
   getDevice: (deviceId) => request(`/devices/${deviceId}`),
   createDevice: (payload) => request('/devices', { method: 'POST', body: payload }),

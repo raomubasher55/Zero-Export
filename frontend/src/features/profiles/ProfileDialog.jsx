@@ -43,6 +43,8 @@ const HELP = {
   scale: "Multiplier applied after decoding. Use 1 when no scaling is needed.",
   offset: "Value added after scaling. Use 0 when no offset is needed.",
   unit: "Engineering unit such as V, A, Hz, kW, or kWh.",
+  writable:
+    "Allows gateway write-through for coil and holding-register definitions. Keep measurements read-only.",
   enabled: "Disabled definitions remain saved but are skipped during polling.",
 };
 
@@ -75,6 +77,12 @@ export function ProfileDialog({ open, onOpenChange, profile, onSave }) {
         ) {
           next.dataType = "BIT";
           next.length = "";
+        }
+        if (
+          field === "registerType" &&
+          ["INPUT_REGISTER", "DISCRETE_INPUT"].includes(value)
+        ) {
+          next.writable = false;
         }
         return next;
       }),
@@ -225,13 +233,14 @@ export function ProfileDialog({ open, onOpenChange, profile, onSave }) {
               </Button>
             </div>
 
-            <div className="hidden grid-cols-[1.35fr_1.05fr_.65fr_1fr_.75fr_1.25fr_.55fr_2.5rem] gap-3 border-b border-slate-100 px-4 py-3 text-xs font-bold uppercase tracking-wide text-slate-500 xl:grid">
+            <div className="hidden grid-cols-[1.35fr_1.05fr_.65fr_1fr_.75fr_1.25fr_.5fr_.5fr_2.5rem] gap-3 border-b border-slate-100 px-4 py-3 text-xs font-bold uppercase tracking-wide text-slate-500 xl:grid">
               <span>Key / name</span>
               <span>Area</span>
               <span>Address</span>
               <span>Type / length</span>
               <span>Order</span>
               <span>Scale / offset / unit</span>
+              <span>Write</span>
               <span>Enabled</span>
               <span />
             </div>
@@ -273,9 +282,12 @@ export function ProfileDialog({ open, onOpenChange, profile, onSave }) {
 function RegisterRow({ register, index, canRemove, update, remove }) {
   const isString = register.dataType === "STRING";
   const isBitArea = ["COIL", "DISCRETE_INPUT"].includes(register.registerType);
+  const isWritableArea = ["COIL", "HOLDING_REGISTER"].includes(
+    register.registerType,
+  );
 
   return (
-    <div className="grid gap-4 bg-white p-4 xl:grid-cols-[1.35fr_1.05fr_.65fr_1fr_.75fr_1.25fr_.55fr_2.5rem] xl:items-start xl:gap-3">
+    <div className="grid gap-4 bg-white p-4 xl:grid-cols-[1.35fr_1.05fr_.65fr_1fr_.75fr_1.25fr_.5fr_.5fr_2.5rem] xl:items-start xl:gap-3">
       <div>
         <MobileLabel>Key / name</MobileLabel>
         <div className="grid gap-2">
@@ -397,6 +409,17 @@ function RegisterRow({ register, index, canRemove, update, remove }) {
         <HelpText>
           {HELP.scale} {HELP.offset} {HELP.unit}
         </HelpText>
+      </div>
+
+      <div className="flex items-center justify-between xl:min-h-9 xl:justify-start">
+        <MobileLabel>Write-through</MobileLabel>
+        <Switch
+          checked={register.writable}
+          disabled={!isWritableArea}
+          onCheckedChange={(value) => update(index, "writable", value)}
+          aria-label={`Allow writes to ${register.key || `register ${index + 1}`}`}
+        />
+        <span className="sr-only">{HELP.writable}</span>
       </div>
 
       <div className="flex items-center justify-between xl:min-h-9 xl:justify-start">

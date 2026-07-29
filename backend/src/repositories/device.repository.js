@@ -91,6 +91,18 @@ class DeviceRepository extends BaseRepository {
     return this.findById(deviceId, { populate: REGISTER_PROFILE_FOR_POLLING });
   }
 
+  async findManyByIdsWithProfiles(deviceIds) {
+    if (deviceIds.length === 0) {
+      return [];
+    }
+
+    return this.model
+      .find({ _id: { $in: deviceIds } })
+      .populate(REGISTER_PROFILE_FOR_POLLING)
+      .lean()
+      .exec();
+  }
+
   async claimNextDueForPolling({ now, leaseId, leaseMs }) {
     const filter = this.buildDuePollFilter(now);
     const leaseUntil = new Date(now.getTime() + leaseMs);

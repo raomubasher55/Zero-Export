@@ -5,8 +5,10 @@ const app = require('./app');
 const { config } = require('./config/environment');
 const { connectDatabase, disconnectDatabase } = require('./config/database');
 const logger = require('./config/logger');
+const { modbusGatewayRuntime } = require('./gateway/modbus-gateway-runtime');
 const { modbusConnectionManager } = require('./modbus/connection-manager');
 const { pollingScheduler } = require('./jobs/polling-scheduler');
+const { gatewayService } = require('./services/gateway.service');
 
 let server;
 let shuttingDown = false;
@@ -31,6 +33,7 @@ async function shutdown(reason, exitCode = 0) {
 
     try {
       await pollingScheduler.stop();
+      await modbusGatewayRuntime.stop();
       await modbusConnectionManager.shutdown();
       await disconnectDatabase();
       logger.info('Graceful shutdown completed', { reason });
@@ -54,6 +57,12 @@ async function shutdown(reason, exitCode = 0) {
 
 async function bootstrap() {
   await connectDatabase();
+
+  await gatewayService.initialize().catch((error) => {
+    logger.error('Unable to initialize the Modbus forwarding gateway', {
+      error: error.stack || error.message,
+    });
+  });
 
   server = http.createServer(app);
   server.listen(config.server.port, config.server.host, () => {
