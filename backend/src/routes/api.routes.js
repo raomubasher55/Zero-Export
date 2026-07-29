@@ -33,6 +33,7 @@ router.get('/', (_req, res) => {
         latestValues: '/api/v1/devices/:deviceId/values',
         communicationLogs: '/api/v1/devices/:deviceId/communication-logs',
         gateway: '/api/v1/gateway',
+        gatewayTraffic: '/api/v1/gateway/traffic',
         pollingStatus: '/api/v1/polling/status',
       },
     },

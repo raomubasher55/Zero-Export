@@ -87,6 +87,24 @@ repository/model, route, and validation boundaries.
   `/devices/:deviceId`, `/profiles`, and `/gateway` instead of local single-view
   state.
 
+### Step 6 — in-memory downstream request analyzer
+
+- Passive TCP and RTU observers capture the inverter/master request and gateway
+  response without changing the Modbus execution path.
+- Captures client IP/port (TCP), serial path (RTU), transaction and unit IDs,
+  function code, address/quantity, raw frames, write values, response words,
+  exception, response duration, and matched forwarding-map semantics.
+- A bounded process-memory ring stores only the latest diagnostic events. It
+  creates no MongoDB model, performs no traffic database writes, and is erased
+  by restart or the Clear Memory action.
+- Live request tables, polling-pattern analysis, address heat maps, client
+  sessions, sequence analysis, mapping suggestions, and JSON/CSV export are
+  available at `/gateway/traffic`.
+- The raw-word assistant previews signed/unsigned/float candidates under ABCD,
+  BADC, CDAB, and DCBA ordering with test scale/offset values. Results are
+  explicitly diagnostic candidates because Modbus does not transmit encoding
+  metadata.
+
 ## Prerequisites
 
 - Node.js **20.11+** (Node 22 LTS recommended)
@@ -322,8 +340,9 @@ with only some decoding failures are `PARTIAL_SUCCESS`: valid values remain
 available while failed keys are recorded in the communication log.
 
 `CommunicationLog` records include operation (`POLL`, `CONNECT`, `READ`, or
-`WRITE`), source (`SCHEDULER`, `MANUAL`, `API`, or `GATEWAY`), outcome, duration, batch and
-register counts, decoded-count metadata, and safe failure data. Logs expire via
+`WRITE`), source (`SCHEDULER`, `MANUAL`, `API`, or `GATEWAY`), outcome,
+duration, batch and register counts, decoded-count metadata, and safe failure
+data. Logs expire via
 a MongoDB TTL index after `COMMUNICATION_LOG_RETENTION_DAYS` (90 days by
 default).
 
@@ -385,6 +404,32 @@ source polling interval that meets downstream freshness requirements. A restart
 seeds the map from MongoDB `LatestValue` records before accepting requests. A
 mapped address with no current source value returns Modbus exception 04 instead
 of silently returning a misleading zero.
+
+### In-memory inverter request analyzer
+
+| Method | Endpoint | Description |
+| --- | --- | --- |
+| `GET` | `/api/v1/gateway/traffic` | List recent completed requests from bounded process memory; supports `limit`, `transport`, `functionCode`, `operation`, `client`, `address`, and `success` filters. The response also contains current aggregate analysis. |
+| `GET` | `/api/v1/gateway/traffic/analysis` | Get patterns, polling intervals/rates, address ranges, clients/sessions, sequences, and mapping suggestions. |
+| `PATCH` | `/api/v1/gateway/traffic/settings` | Enable/disable capture or change the 100–10,000 event memory limit. Settings are not persisted. |
+| `DELETE` | `/api/v1/gateway/traffic` | Clear completed traffic from memory. |
+| `POST` | `/api/v1/gateway/traffic/interpret` | Preview possible integer/float/order interpretations for supplied raw register words and test scale/offset. |
+| `GET` | `/api/v1/gateway/traffic/export?format=json|csv` | Download the currently retained diagnostic view. |
+
+Traffic capture is deliberately **not a database feature**. No request or
+response is inserted into MongoDB, no traffic model/index is created, and no
+traffic file is written by the analyzer. Completed events are held only in a
+bounded JavaScript array (2,000 by default), oldest events are discarded at the
+limit, and everything disappears when the backend process restarts. JSON/CSV is
+created only when an operator explicitly downloads it.
+
+For every observed request the analyzer records what is actually present on the
+wire: transport/client, transaction ID (TCP), unit ID, function code, address,
+quantity, write payload, raw request/response, returned bits/words, exception,
+response time, and matching configured output mappings. Data type, order, scale,
+offset, engineering unit, and import/export sign are never claimed as wire
+facts; the UI labels them as configured mapping semantics or candidate
+interpretations requiring manual confirmation.
 
 ## Configuration
 
@@ -472,8 +517,11 @@ endpoint. It provides an operations dashboard for:
   latest decoded values, and retained communication history.
 - A dedicated forwarding-gateway page for TCP/RTU slave endpoints, mirrored or
   custom output mappings, function-code visibility, and guarded write-through.
+- An in-memory inverter request analyzer with live traffic, request patterns,
+  address heat map, sessions, raw frame inspection, mapping suggestions, and
+  candidate data-type/order previews.
 - React Router navigation with bookmarkable operations, device, profile,
-  per-device telemetry, and gateway URLs.
+  per-device telemetry, gateway, and `/gateway/traffic` analyzer URLs.
 - Responsive fleet/profile views with backend validation errors and request
   failures surfaced in the UI.
 

@@ -73,6 +73,24 @@ export const api = {
   updateGateway: (payload) => request('/gateway', { method: 'PUT', body: payload }),
   startGateway: () => request('/gateway/start', { method: 'POST' }),
   stopGateway: () => request('/gateway/stop', { method: 'POST' }),
+  listGatewayTraffic: (query) => request(`/gateway/traffic${toQueryString(query)}`),
+  getGatewayTrafficAnalysis: () => request('/gateway/traffic/analysis'),
+  updateGatewayTrafficSettings: (payload) =>
+    request('/gateway/traffic/settings', { method: 'PATCH', body: payload }),
+  clearGatewayTraffic: () => request('/gateway/traffic', { method: 'DELETE' }),
+  interpretGatewayTraffic: (payload) =>
+    request('/gateway/traffic/interpret', { method: 'POST', body: payload }),
+  exportGatewayTraffic: async (format = 'json') => {
+    const response = await fetch(
+      `${API_BASE_URL}/gateway/traffic/export${toQueryString({ format })}`,
+    );
+    if (!response.ok) {
+      throw new ApiError(`Traffic export failed with status ${response.status}.`, {
+        status: response.status,
+      });
+    }
+    return response.blob();
+  },
 
   listDevices: (query) => request(`/devices${toQueryString(query)}`),
   getDevice: (deviceId) => request(`/devices/${deviceId}`),

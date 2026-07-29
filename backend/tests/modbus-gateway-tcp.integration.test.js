@@ -5,6 +5,7 @@ const net = require('node:net');
 const test = require('node:test');
 const ModbusRTU = require('modbus-serial');
 const { ModbusGatewayRuntime } = require('../src/gateway/modbus-gateway-runtime');
+const { ModbusTrafficAnalyzer } = require('../src/gateway/modbus-traffic-analyzer');
 
 async function availablePort() {
   const server = net.createServer();
@@ -24,7 +25,9 @@ function closeClient(client) {
 test('TCP gateway serves FC03 values and performs FC06 write-through', async () => {
   const port = await availablePort();
   const writes = [];
+  const trafficAnalyzer = new ModbusTrafficAnalyzer();
   const runtime = new ModbusGatewayRuntime({
+    trafficAnalyzer,
     writeThroughService: {
       write: async (_mapping, value) => writes.push(value),
     },
@@ -77,6 +80,16 @@ test('TCP gateway serves FC03 values and performs FC06 write-through', async () 
 
     const after = await client.readHoldingRegisters(10, 1);
     assert.deepEqual(after.data, [2400]);
+
+    const traffic = trafficAnalyzer.list({ limit: 10 });
+    assert.equal(traffic.events.length, 3);
+    assert.equal(traffic.events[0].functionCode, 3);
+    assert.equal(traffic.events[0].address, 10);
+    assert.equal(traffic.events[0].quantity, 1);
+    assert.deepEqual(traffic.events[0].responseValues, [2400]);
+    assert.equal(traffic.events[0].mappings[0].key, 'voltage');
+    assert.match(traffic.events[0].requestHex, /03 00 0A 00 01/);
+    assert.equal(trafficAnalyzer.analyze().summary.successfulRequests, 3);
   } finally {
     await closeClient(client);
     await runtime.stop();

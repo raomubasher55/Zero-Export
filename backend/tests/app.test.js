@@ -44,6 +44,7 @@ test('GET /api/v1 advertises the versioned EMS domain resources', async () => {
   assert.equal(response.body.data.resources.pollDevice, '/api/v1/devices/:deviceId/poll');
   assert.equal(response.body.data.resources.latestValues, '/api/v1/devices/:deviceId/values');
   assert.equal(response.body.data.resources.gateway, '/api/v1/gateway');
+  assert.equal(response.body.data.resources.gatewayTraffic, '/api/v1/gateway/traffic');
 });
 
 test('device routes reject malformed commands before accessing the database', async () => {
@@ -65,6 +66,16 @@ test('GET /api/v1/polling/status returns scheduler state without requiring a dev
   assert.equal(response.status, 200);
   assert.equal(response.body.success, true);
   assert.equal(typeof response.body.data.running, 'boolean');
+});
+
+test('gateway traffic analyzer is process-memory-only and available without database traffic storage', async () => {
+  const response = await request('/api/v1/gateway/traffic?limit=10');
+
+  assert.equal(response.status, 200);
+  assert.equal(response.body.success, true);
+  assert.equal(response.body.data.settings.inMemoryOnly, true);
+  assert.equal(response.body.data.settings.persistence, 'NONE');
+  assert.ok(Array.isArray(response.body.data.events));
 });
 
 test('gateway route rejects unsafe configuration before accessing the database', async () => {

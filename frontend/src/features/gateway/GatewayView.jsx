@@ -4,11 +4,13 @@ import {
   CirclePlus,
   LoaderCircle,
   Play,
+  Radio,
   RotateCcw,
   Save,
   Square,
   Trash2,
 } from "lucide-react";
+import { Link } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -248,6 +250,11 @@ export function GatewayView({ devices, profiles, notify }) {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <Button asChild variant="outline">
+            <Link to="/gateway/traffic">
+              <Radio className="h-4 w-4" /> Analyze client requests
+            </Link>
+          </Button>
           <Button variant="outline" onClick={load} disabled={working}>
             <RotateCcw className="h-4 w-4" /> Refresh
           </Button>

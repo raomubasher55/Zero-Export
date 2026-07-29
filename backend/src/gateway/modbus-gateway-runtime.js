@@ -5,6 +5,11 @@ const logger = require('../config/logger');
 const { REGISTER_TYPES } = require('../constants/modbus');
 const { decodeRegister } = require('../modbus/register-decoder');
 const { encodeRegister } = require('../modbus/register-encoder');
+const { modbusTrafficAnalyzer } = require('./modbus-traffic-analyzer');
+const {
+  attachRtuTrafficObserver,
+  attachTcpTrafficObserver,
+} = require('./modbus-traffic-observers');
 const GatewayWriteThroughService = require('../services/gateway-write-through.service');
 
 const GATEWAY_STATES = Object.freeze({
@@ -84,9 +89,12 @@ class ModbusGatewayRuntime {
       },
     };
     this.writeThroughService = options.writeThroughService || new GatewayWriteThroughService();
+    this.trafficAnalyzer = options.trafficAnalyzer || modbusTrafficAnalyzer;
     this.configuration = null;
     this.tcpServer = null;
     this.rtuServer = null;
+    this.tcpTrafficCleanup = null;
+    this.rtuTrafficCleanup = null;
     this.mappingsByAddress = new Map();
     this.mappingsBySource = new Map();
     this.memory = new Map();
@@ -138,6 +146,10 @@ class ModbusGatewayRuntime {
       });
     }
 
+    this.trafficAnalyzer.setMappingResolver((registerType, address, quantity) =>
+      this.resolveMappings(registerType, address, quantity),
+    );
+
     for (const value of initialValues) {
       this.publish(value.device, [value]);
     }
@@ -166,6 +178,10 @@ class ModbusGatewayRuntime {
           this.configuration.unitId,
         );
         this.attachServerListeners(this.tcpServer, 'tcp');
+        this.tcpTrafficCleanup = attachTcpTrafficObserver(
+          this.tcpServer,
+          this.trafficAnalyzer,
+        );
         await waitForServer(this.tcpServer, 'serverError');
         this.endpointStates.tcp = GATEWAY_STATES.RUNNING;
       }
@@ -178,6 +194,11 @@ class ModbusGatewayRuntime {
           this.configuration.unitId,
         );
         this.attachServerListeners(this.rtuServer, 'rtu');
+        this.rtuTrafficCleanup = attachRtuTrafficObserver(
+          this.rtuServer,
+          this.trafficAnalyzer,
+          this.configuration.rtu,
+        );
         await waitForServer(this.rtuServer, 'error');
         this.endpointStates.rtu = GATEWAY_STATES.RUNNING;
       }
@@ -206,6 +227,10 @@ class ModbusGatewayRuntime {
     const rtuServer = this.rtuServer;
     this.tcpServer = null;
     this.rtuServer = null;
+    this.tcpTrafficCleanup?.();
+    this.rtuTrafficCleanup?.();
+    this.tcpTrafficCleanup = null;
+    this.rtuTrafficCleanup = null;
     await Promise.all([closeServer(tcpServer), closeServer(rtuServer)]);
     this.endpointStates.tcp = GATEWAY_STATES.STOPPED;
     this.endpointStates.rtu = GATEWAY_STATES.STOPPED;
@@ -392,6 +417,53 @@ class ModbusGatewayRuntime {
     });
   }
 
+  resolveMappings(registerType, address, quantity = 1) {
+    const requestedAddresses = Array.from(
+      { length: Math.max(1, quantity) },
+      (_, offset) => address + offset,
+    );
+    const matches = new Map();
+
+    for (const requestedAddress of requestedAddresses) {
+      const mapping = this.mappingsByAddress.get(
+        this.addressKey(registerType, requestedAddress),
+      );
+      if (!mapping) continue;
+      const match = matches.get(mapping.key) || { mapping, coveredAddresses: [] };
+      match.coveredAddresses.push(requestedAddress);
+      matches.set(mapping.key, match);
+    }
+
+    return [...matches.values()].map(({ mapping, coveredAddresses }) => {
+      const order =
+        mapping.byteOrder === 'LITTLE_ENDIAN'
+          ? mapping.wordOrder === 'LITTLE_ENDIAN'
+            ? 'DCBA'
+            : 'BADC'
+          : mapping.wordOrder === 'LITTLE_ENDIAN'
+            ? 'CDAB'
+            : 'ABCD';
+      return {
+        key: mapping.key,
+        name: mapping.name,
+        sourceDeviceId: String(mapping.sourceDeviceId),
+        sourceRegisterKey: mapping.sourceRegisterKey,
+        registerType: mapping.registerType,
+        address: mapping.address,
+        endAddress: mapping.address + mapping.length - 1,
+        dataType: mapping.dataType,
+        length: mapping.length,
+        order,
+        scaleFactor: mapping.scaleFactor,
+        offset: mapping.offset,
+        unit: mapping.unit || null,
+        writable: mapping.writable,
+        coveredAddresses,
+        fullyCoversRequest: coveredAddresses.length === requestedAddresses.length,
+      };
+    });
+  }
+
   getStatus() {
     return {
       state: this.state,
@@ -403,6 +475,7 @@ class ModbusGatewayRuntime {
       mappedAddressCount: this.mappingsByAddress.size,
       mappingCount: this.mappingStats.size,
       mappings: [...this.mappingStats.entries()].map(([key, status]) => ({ key, ...status })),
+      trafficCapture: this.trafficAnalyzer.getSettings(),
     };
   }
 

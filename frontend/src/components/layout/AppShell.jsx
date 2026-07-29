@@ -3,6 +3,7 @@ import {
   FileCog,
   Gauge,
   Network,
+  Radio,
   RefreshCw,
 } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
@@ -14,13 +15,15 @@ const NAV_ITEMS = [
   { path: "/", label: "Operations", icon: Gauge, end: true },
   { path: "/devices", label: "Devices", icon: Network },
   { path: "/profiles", label: "Register profiles", icon: FileCog },
-  { path: "/gateway", label: "Forwarding gateway", icon: ArrowRightLeft },
+  { path: "/gateway", label: "Forwarding gateway", icon: ArrowRightLeft, end: true },
+  { path: "/gateway/traffic", label: "Traffic analyzer", icon: Radio },
 ];
 
 function pageTitle(pathname) {
   if (/^\/devices\/[^/]+/.test(pathname)) return "Device telemetry";
   if (pathname.startsWith("/devices")) return "Device fleet";
   if (pathname.startsWith("/profiles")) return "Register profiles";
+  if (pathname.startsWith("/gateway/traffic")) return "Inverter request analyzer";
   if (pathname.startsWith("/gateway")) return "Modbus forwarding gateway";
   return "Operations center";
 }
