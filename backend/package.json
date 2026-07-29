@@ -1,0 +1,37 @@
+{
+  "name": "zero-export-backend",
+  "version": "1.0.0",
+  "description": "Production-grade Modbus core backend for an energy monitoring system",
+  "private": true,
+  "main": "src/index.js",
+  "engines": {
+    "node": ">=20.11.0",
+    "npm": ">=10.0.0"
+  },
+  "scripts": {
+    "dev": "node --watch src/index.js",
+    "start": "node src/index.js",
+    "test": "node --test",
+    "lint": "eslint .",
+    "check": "npm run lint && npm test",
+    "db:create-indexes": "node src/scripts/create-indexes.js"
+  },
+  "dependencies": {
+    "compression": "^1.8.1",
+    "cors": "^2.8.5",
+    "dotenv": "^16.6.1",
+    "express": "^4.21.2",
+    "express-rate-limit": "^7.5.0",
+    "helmet": "^8.1.0",
+    "hpp": "^0.2.3",
+    "modbus-serial": "^8.0.25",
+    "mongoose": "^8.18.1",
+    "winston": "^3.18.3",
+    "winston-daily-rotate-file": "^5.0.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "eslint": "^10.8.0",
+    "globals": "^16.3.0"
+  }
+}
