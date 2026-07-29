@@ -478,18 +478,26 @@ function TrafficFilters({ filters, setFilters }) {
 
 function LiveTrafficTable({ events, selectedId, onSelect }) {
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Captured requests</CardTitle>
+    <Card className="overflow-hidden">
+      <CardHeader className="border-b border-slate-100">
+        <CardTitle className="flex flex-wrap items-center gap-2">
+          Captured requests
+          <Badge variant="outline">{events.length}</Badge>
+        </CardTitle>
         <CardDescription>Newest completed Modbus request first. Select a row for raw analysis.</CardDescription>
       </CardHeader>
       <CardContent className="p-0">
         {events.length === 0 ? (
           <EmptyTraffic message="No matching requests captured. Start the gateway and let the inverter poll it." />
         ) : (
-          <div className="overflow-x-auto">
+          <div
+            className="data-scroll-region max-h-[65vh] overflow-auto overscroll-contain [scrollbar-gutter:stable] sm:max-h-[38rem]"
+            role="region"
+            aria-label="Scrollable captured Modbus requests"
+            tabIndex={0}
+          >
             <table className="w-full min-w-[1100px] text-sm">
-              <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+              <thead className="sticky top-0 z-10 bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500 shadow-[0_1px_0_0_rgb(226_232_240)]">
                 <tr>
                   <th className="px-4 py-3">Time</th>
                   <th className="px-4 py-3">Client</th>

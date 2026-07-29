@@ -147,10 +147,13 @@ export function DeviceMonitor({ device, onBack, onRefresh, notify }) {
         </div>
       )}
       <div className="grid gap-5 xl:grid-cols-[1.45fr_0.75fr]">
-        <Card>
+        <Card className="overflow-hidden">
           <CardHeader className="flex-row items-center justify-between space-y-0 border-b border-slate-100">
-            <div>
-              <CardTitle>Latest decoded values</CardTitle>
+            <div className="min-w-0">
+              <CardTitle className="flex flex-wrap items-center gap-2">
+                Latest decoded values
+                <Badge variant="outline">{values.length}</Badge>
+              </CardTitle>
               <CardDescription>
                 Current persisted values from the assigned profile
               </CardDescription>
@@ -170,9 +173,14 @@ export function DeviceMonitor({ device, onBack, onRefresh, notify }) {
                 description="Run a successful poll after assigning an active register profile."
               />
             ) : (
-              <div className="overflow-x-auto">
+              <div
+                className="data-scroll-region max-h-[65vh] overflow-auto overscroll-contain [scrollbar-gutter:stable] sm:max-h-[34rem]"
+                role="region"
+                aria-label="Scrollable latest decoded values"
+                tabIndex={0}
+              >
                 <table className="w-full min-w-[620px] text-sm">
-                  <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+                  <thead className="sticky top-0 z-10 bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500 shadow-[0_1px_0_0_rgb(226_232_240)]">
                     <tr>
                       <th className="px-5 py-3">Register</th>
                       <th className="px-4 py-3">Value</th>
@@ -195,7 +203,7 @@ export function DeviceMonitor({ device, onBack, onRefresh, notify }) {
                             {value.unit}
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-xs text-slate-600">
+                        <td className="max-w-72 break-words px-4 py-3 text-xs text-slate-600">
                           {Array.isArray(value.rawValues)
                             ? value.rawValues.join(", ")
                             : String(value.rawValue)}
@@ -216,11 +224,12 @@ export function DeviceMonitor({ device, onBack, onRefresh, notify }) {
           <RawOperations device={device} execute={execute} />
         </div>
       </div>
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
+      <Card className="overflow-hidden">
+        <CardHeader className="border-b border-slate-100">
+          <CardTitle className="flex flex-wrap items-center gap-2">
             <Terminal className="h-5 w-5 text-indigo-500" />
             Communication history
+            <Badge variant="outline">{logs.length}</Badge>
           </CardTitle>
           <CardDescription>
             Retained Modbus operation metadata and poll outcomes
@@ -233,7 +242,12 @@ export function DeviceMonitor({ device, onBack, onRefresh, notify }) {
               description="Logs appear after polling or running Modbus actions."
             />
           ) : (
-            <div className="divide-y divide-slate-100">
+            <div
+              className="data-scroll-region max-h-[60vh] divide-y divide-slate-100 overflow-y-auto overscroll-contain [scrollbar-gutter:stable] sm:max-h-[30rem]"
+              role="region"
+              aria-label="Scrollable communication history"
+              tabIndex={0}
+            >
               {logs.map((log) => (
                 <div
                   key={log._id}
@@ -250,21 +264,21 @@ export function DeviceMonitor({ device, onBack, onRefresh, notify }) {
                       {log.outcome}
                     </Badge>
                   </div>
-                  <div className="flex-1">
+                  <div className="min-w-0 flex-1">
                     <p className="text-sm font-semibold">
                       {log.operation}{" "}
                       <span className="font-normal text-slate-500">
                         via {log.source}
                       </span>
                     </p>
-                    <p className="mt-0.5 text-xs text-slate-500">
+                    <p className="mt-0.5 break-words text-xs text-slate-500">
                       {log.request?.batchCount || 0} batches ·{" "}
                       {log.request?.registerCount || 0} registers ·{" "}
                       {log.durationMs ?? "—"} ms
                       {log.error?.message ? ` · ${log.error.message}` : ""}
                     </p>
                   </div>
-                  <p className="text-xs text-slate-500">
+                  <p className="shrink-0 text-xs text-slate-500">
                     {formatDate(log.timestamp)}
                   </p>
                 </div>

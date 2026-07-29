@@ -424,19 +424,27 @@ export function GatewayView({ devices, profiles, notify }) {
         </Card>
       </div>
 
-      <Card>
-        <CardHeader className="flex-row items-center justify-between space-y-0 border-b border-slate-100">
-          <div>
-            <CardTitle>Forwarding register map</CardTitle>
+      <Card className="overflow-hidden">
+        <CardHeader className="flex-col items-stretch justify-between gap-3 space-y-0 border-b border-slate-100 sm:flex-row sm:items-center">
+          <div className="min-w-0">
+            <CardTitle className="flex flex-wrap items-center gap-2">
+              Forwarding register map
+              <Badge variant="outline">{form.mappings.length}</Badge>
+            </CardTitle>
             <CardDescription>
               Select a source to mirror its settings, then edit the slave area, address, type, order, scale, or offset.
             </CardDescription>
           </div>
-          <Button variant="outline" size="sm" onClick={addMapping}>
+          <Button className="w-full shrink-0 sm:ml-3 sm:w-auto" variant="outline" size="sm" onClick={addMapping}>
             <CirclePlus className="h-4 w-4" /> Add mapping
           </Button>
         </CardHeader>
-        <CardContent className="space-y-4 p-4 sm:p-6">
+        <CardContent
+          className="data-scroll-region max-h-[70vh] space-y-4 overflow-y-auto overscroll-contain p-4 [scrollbar-gutter:stable] sm:max-h-[42rem] sm:p-6"
+          role="region"
+          aria-label="Scrollable forwarding register mappings"
+          tabIndex={0}
+        >
           {form.mappings.length === 0 ? (
             <div className="rounded-xl border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500">
               No forwarded registers. Add a mapping after assigning a register profile to a device.
@@ -501,8 +509,8 @@ function MappingCard({
   return (
     <section className="rounded-xl border border-slate-200 bg-slate-50/60 p-4">
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-2">
-          <ArrowRightLeft className="h-4 w-4 text-indigo-500" />
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <ArrowRightLeft className="h-4 w-4 shrink-0 text-indigo-500" />
           <h3 className="font-semibold">Mapping {index + 1}</h3>
           <Badge variant="outline">Read {READ_FUNCTION_CODES[mapping.registerType]}</Badge>
           <Badge variant="outline">

@@ -62,4 +62,28 @@
   .form-textarea {
     @apply flex w-full resize-y rounded-md border border-input bg-white px-3 py-2 text-sm shadow-sm outline-none transition-colors focus:border-slate-400 focus:ring-2 focus:ring-slate-200 disabled:cursor-not-allowed disabled:opacity-50;
   }
+
+  .data-scroll-region {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(148 163 184) rgb(241 245 249);
+  }
+
+  .data-scroll-region::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  .data-scroll-region::-webkit-scrollbar-track {
+    background: rgb(241 245 249);
+  }
+
+  .data-scroll-region::-webkit-scrollbar-thumb {
+    border: 2px solid rgb(241 245 249);
+    border-radius: 9999px;
+    background: rgb(148 163 184);
+  }
+
+  .data-scroll-region::-webkit-scrollbar-thumb:hover {
+    background: rgb(100 116 139);
+  }
 }
