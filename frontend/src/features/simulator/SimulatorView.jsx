@@ -499,7 +499,7 @@ export function SimulatorView({ devices, profiles, notify, onForwardProfile }) {
                 {deviceStatus?.readBlocks?.length > 0 && (
                   <div className="rounded-lg border border-slate-100 bg-slate-50 p-3">
                     <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">
-                      Valid FC03 read blocks (gaps return exception 02)
+                      Defined FC03 read blocks (gaps read as 0)
                     </p>
                     <div className="flex flex-wrap gap-1.5">
                       {deviceStatus.readBlocks.map((block) => (

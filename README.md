@@ -202,8 +202,11 @@ repository/model, route, and validation boundaries.
 - The profile declares **`maxReadQuantity: 15`** — the SUN2000 rejects FC03
   reads of more than 15 registers per request. The polling planner splits
   reads into ≤15-register batches automatically, and the Huawei simulator
-  enforces the same limit (Modbus exception 0x03 for larger batches), so
-  tests behave like the real inverter.
+  enforces the same quantity limit (Modbus exception 0x03 for larger
+  batches). Reserved/gap addresses inside a range read as **0** instead of
+  raising exception 02 (`options.zeroFillGaps`, default on) so raw-read
+  testing can cross the map freely; set `zeroFillGaps: false` to restore the
+  strict exception behavior.
 - The simulator now runs **two devices side by side**, each with its own TCP
   port and a **configurable slave unit ID**: an EM500 grid meter
   (`0.0.0.0:15020`, unit 1) and a Huawei SUN2000 inverter

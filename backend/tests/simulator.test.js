@@ -71,13 +71,20 @@ test('EM500 simulator serves raw words that decode back with the EM500 profile',
   assert.throws(
     () => vector.getInputRegister(0x0002, 2),
     (error) => error.modbusErrorCode === 0x02,
+    'unexpected unit IDs still raise an exception',
   );
+  // Gap/reserved addresses read as 0 instead of raising exception 02.
+  assert.equal(vector.getHoldingRegister(0x0002, 1), 0, 'EM500 holding gap reads as 0');
+  assert.equal(vector.getInputRegister(0xffff, 1), 0, 'unmapped address reads as 0');
+
+  await instance.stop();
+
+  // Disabling zero-fill restores the strict exception behavior.
+  instance.configure({ options: { zeroFillGaps: false } });
   assert.throws(
     () => vector.getHoldingRegister(0x0002, 1),
     (error) => error.modbusErrorCode === 0x02,
   );
-
-  await instance.stop();
 });
 
 test('Huawei simulator serves holding registers and accepts derating writes', async () => {
@@ -140,11 +147,10 @@ test('Huawei simulator serves holding registers and accepts derating writes', as
   assert.throws(
     () => vector.setRegister(32080, 1, 2),
     (error) => error.modbusErrorCode === 0x02,
+    'writes to non-writable registers still raise an exception',
   );
-  assert.throws(
-    () => vector.getInputRegister(32066, 2),
-    (error) => error.modbusErrorCode === 0x02,
-  );
+  // Input registers do not exist on the Huawei device; gaps read as 0.
+  assert.equal(vector.getInputRegister(32066, 2), 0, 'Huawei input gap reads as 0');
 
   await instance.stop();
 });

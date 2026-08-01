@@ -340,7 +340,12 @@ class SimulatorDevice {
     const key = this.addressKey(registerType, address);
     const word = this.memory.get(key);
     if (word === undefined) {
-      throw modbusError(`Address ${address} is not simulated in ${registerType}.`, 0x02);
+      // Reserved/gap addresses read as 0 instead of an exception unless
+      // zeroFillGaps is disabled explicitly.
+      if (this.configuration.options?.zeroFillGaps === false) {
+        throw modbusError(`Address ${address} is not simulated in ${registerType}.`, 0x02);
+      }
+      return 0;
     }
     return word;
   }

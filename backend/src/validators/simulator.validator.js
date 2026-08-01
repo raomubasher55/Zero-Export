@@ -19,6 +19,7 @@ const simulatorDeviceUpdateSchema = z
         ratingKw: z.number().finite().min(0.1).max(100000).optional(),
         availabilityPct: z.number().finite().min(0).max(100).optional(),
         loadKw: z.number().finite().min(0).max(100000).optional(),
+        zeroFillGaps: z.boolean().optional(),
       })
       .strict()
       .optional(),
