@@ -49,6 +49,7 @@ function portableProfile(profile) {
     model: profile.model ?? null,
     registers: (profile.registers || []).map(portableRegister),
     isActive: profile.isActive ?? true,
+    maxReadQuantity: profile.maxReadQuantity ?? null,
     tags: profile.tags || [],
     metadata: profile.metadata ?? null,
   };

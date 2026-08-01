@@ -189,10 +189,21 @@ repository/model, route, and validation boundaries.
 ### Step 10 — Huawei inverter profile, dual-device simulator, and zero-export control
 
 - A built-in **Huawei SUN2000** register profile ships with the backend
-  (`backend/src/seed/huawei-sun2000.profile.js`): line/phase voltages, phase
-  currents, active power, grid frequency, daily/total yield (FC03 holding
-  registers per the Huawei Modbus Interface Definitions V3.0), plus writable
-  derating registers `40125` (0–1000, 0.1% steps) and `40126` (W).
+  (`backend/src/seed/huawei-sun2000.profile.js`): the full V3.0 map — model
+  name/serial/PN (STRING), model ID, PV strings, MPPT count, rated/max power,
+  states and alarm bitfields, PV string voltages/currents, AC line/phase
+  voltages, currents, active/reactive power, power factor, grid frequency,
+  efficiency, cabinet temperature, insulation resistance, device status,
+  daily/total yield, battery registers, external-meter registers
+  (37100–37121, import/export energy), and writable control registers:
+  `40200` remote control enable, `40201` derating (0–1000, 0.1% steps),
+  `40206` fixed limit (W), `40208` PF command, `40212` zero-export mode,
+  `40213` max feed-in (W), and battery control (47075/47077/47086).
+- The profile declares **`maxReadQuantity: 15`** — the SUN2000 rejects FC03
+  reads of more than 15 registers per request. The polling planner splits
+  reads into ≤15-register batches automatically, and the Huawei simulator
+  enforces the same limit (Modbus exception 0x03 for larger batches), so
+  tests behave like the real inverter.
 - The simulator now runs **two devices side by side**, each with its own TCP
   port and a **configurable slave unit ID**: an EM500 grid meter
   (`0.0.0.0:15020`, unit 1) and a Huawei SUN2000 inverter

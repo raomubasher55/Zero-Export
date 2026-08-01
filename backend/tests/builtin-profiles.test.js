@@ -5,6 +5,7 @@ const test = require('node:test');
 const { REGISTER_DATA_TYPES } = require('../src/constants/modbus');
 const { createRegisterProfileBodySchema } = require('../src/validators/register-profile.validator');
 const { EM500_PROFILE } = require('../src/seed/em500.profile');
+const { HUAWEI_SUN2000_PROFILE } = require('../src/seed/huawei-sun2000.profile');
 const {
   BUILTIN_PROFILES,
   seedBuiltinProfiles,
@@ -120,6 +121,43 @@ test('EM500 energy registers are 4-word UINT64 counters scaled by 0.01', () => {
   assert.equal(byKey.get('l3_apparent_energy_tariff_2').address, 0x1c0c);
 });
 
+test('built-in Huawei profile covers the full V3.0 map with a 15-register read limit', () => {
+  const parsed = createRegisterProfileBodySchema.parse(HUAWEI_SUN2000_PROFILE);
+
+  assert.equal(parsed.identifier, 'huawei-sun2000');
+  assert.equal(parsed.maxReadQuantity, 15);
+  assert.equal(parsed.registers.length, 69);
+
+  const keys = new Set(parsed.registers.map((register) => register.key));
+  assert.equal(keys.size, 69, 'register keys must be unique');
+
+  const byKey = new Map(parsed.registers.map((register) => [register.key, register]));
+
+  assert.equal(byKey.get('model_name').dataType, 'STRING');
+  assert.equal(byKey.get('model_name').length, 15);
+  assert.equal(byKey.get('serial_number').length, 10);
+  assert.equal(byKey.get('pn_code').length, 10);
+  assert.equal(byKey.get('active_power_derating').address, 40201);
+  assert.equal(byKey.get('active_power_derating').writable, true);
+  assert.equal(byKey.get('active_power_derating').scaleFactor, 0.1);
+  assert.equal(byKey.get('active_power_fixed_limit').address, 40206);
+  assert.equal(byKey.get('active_power_fixed_limit').writable, true);
+  assert.equal(byKey.get('remote_power_control_enable').address, 40200);
+  assert.equal(byKey.get('zero_export_mode').address, 40212);
+  assert.equal(byKey.get('max_grid_feed_in_power').address, 40213);
+  assert.equal(byKey.get('meter_grid_active_power').address, 37113);
+  assert.equal(byKey.get('battery_soc').address, 37004);
+  assert.equal(byKey.get('total_yield').address, 32106);
+
+  for (const register of parsed.registers) {
+    assert.equal(register.registerType, 'HOLDING_REGISTER');
+    assert.ok(register.address + register.length <= 65536);
+    if (register.dataType !== 'STRING') {
+      assert.ok(register.length <= 15, 'every word register must fit one 15-word batch');
+    }
+  }
+});
+
 test('built-in profile seed creates missing profiles and never overwrites existing ones', async () => {
   const created = [];
   const repository = {
@@ -181,10 +219,10 @@ test('built-in profile seed upgrades stale built-in profiles to the shipped vers
   };
 
   const results = await seedBuiltinProfiles(repository);
-  // EM500 ships at version 2 (upgrade), Huawei ships at version 1 (current).
+  // Both profiles ship at version 2, so stale version-1 built-ins upgrade.
   assert.deepEqual(
     results.map((result) => result.action),
-    ['UPDATED', 'SKIPPED'],
+    ['UPDATED', 'UPDATED'],
   );
 
   const em500Upgrade = updated.find((profile) => profile.identifier === 'em500');

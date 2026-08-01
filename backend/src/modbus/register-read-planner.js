@@ -30,7 +30,7 @@ function assertDefinition(definition) {
   }
 }
 
-function buildReadPlan(registers) {
+function buildReadPlan(registers, maxReadQuantity = 125) {
   const enabledRegisters = registers.filter((definition) => definition.enabled !== false);
   const byType = new Map();
 
@@ -44,10 +44,21 @@ function buildReadPlan(registers) {
   const batches = [];
   for (const [registerType, definitions] of byType.entries()) {
     const maxQuantity = MAX_READ_QUANTITIES[registerType];
+    // Word areas honor the device's per-profile batch limit; bit areas keep
+    // the protocol maximum.
+    const batchLimit =
+      [REGISTER_TYPES.HOLDING, REGISTER_TYPES.INPUT].includes(registerType)
+        ? Math.min(maxQuantity, maxReadQuantity)
+        : maxQuantity;
     definitions.sort((left, right) => left.address - right.address || left.length - right.length);
 
     let currentBatch;
     for (const definition of definitions) {
+      if (definition.length > batchLimit) {
+        throw new RegisterReadPlanError(
+          `Register definition ${definition.key} (${definition.length} words) exceeds the profile read limit of ${batchLimit}.`,
+        );
+      }
       const definitionEnd = definition.address + definition.length;
       if (!currentBatch) {
         currentBatch = {
@@ -63,7 +74,7 @@ function buildReadPlan(registers) {
       const isContiguousOrOverlapping = definition.address <= currentEnd;
       const nextQuantity = Math.max(currentEnd, definitionEnd) - currentBatch.address;
 
-      if (isContiguousOrOverlapping && nextQuantity <= maxQuantity) {
+      if (isContiguousOrOverlapping && nextQuantity <= batchLimit) {
         currentBatch.quantity = nextQuantity;
         currentBatch.registers.push(definition);
       } else {

@@ -165,11 +165,11 @@ test('master writes derating through the gateway and the simulated inverter foll
     // Master reads current output power and derating from the gateway.
     const powerBeforeWords = await master.readHoldingRegisters(32080, 2);
     const powerBeforeKw = decodeRegister(defs.get('active_power'), powerBeforeWords.data).value;
-    const deratingBefore = await master.readHoldingRegisters(40125, 1);
+    const deratingBefore = await master.readHoldingRegisters(40201, 1);
     assert.deepEqual(deratingBefore.data, [1000], 'derating starts at 100%');
 
     // Master writes 500 (50%) to the derating register on the gateway.
-    await master.writeRegister(40125, 500);
+    await master.writeRegister(40201, 500);
     assert.equal(
       simulator.model.deratingRaw,
       500,
@@ -188,11 +188,11 @@ test('master writes derating through the gateway and the simulated inverter foll
     );
 
     // Read-back of the derating register on the gateway returns the written value.
-    const deratingAfter = await master.readHoldingRegisters(40125, 1);
+    const deratingAfter = await master.readHoldingRegisters(40201, 1);
     assert.deepEqual(deratingAfter.data, [500]);
 
     // Master restores full output; the inverter follows back up.
-    await master.writeRegister(40125, 1000);
+    await master.writeRegister(40201, 1000);
     simulator.tick();
     publishAll();
     const powerRestoredWords = await master.readHoldingRegisters(32080, 2);

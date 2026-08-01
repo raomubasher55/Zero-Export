@@ -157,15 +157,15 @@ export function ZeroExportView({ devices, profiles, notify }) {
     },
   });
 
-  /** Keep the meter simulator's site load in sync with the planned load. */
+  /** Keep both simulators' site load in sync with the planned load. */
   const syncSimulatorLoad = async (simulation) => {
     if (!simulation?.enabled) return;
+    const loadKw = Number(simulation.loadKw);
     try {
-      await api.updateSimulatorDevice("em500", {
-        options: { loadKw: Number(simulation.loadKw) },
-      });
+      await api.updateSimulatorDevice("em500", { options: { loadKw } });
+      await api.updateSimulatorDevice("huawei", { options: { loadKw } });
     } catch {
-      // The meter simulator may not exist; the controller still works.
+      // The simulators may not exist; the controller still works.
     }
   };
 

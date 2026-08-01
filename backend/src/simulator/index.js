@@ -38,6 +38,7 @@ const simulatorDevices = Object.freeze({
       options: {
         ratingKw: 100,
         availabilityPct: 80,
+        loadKw: 100,
       },
     },
   }),

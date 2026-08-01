@@ -47,7 +47,7 @@ const zeroExportConfigurationSchema = new mongoose.Schema(
       required: true,
       min: 0,
       max: 65535,
-      default: 40125,
+      default: 40201,
     },
     targetGridKw: { type: Number, default: 0 },
     deadbandKw: { type: Number, default: 0.5, min: 0, max: 10000 },

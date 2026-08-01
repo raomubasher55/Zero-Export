@@ -151,10 +151,24 @@ class SimulatorDevice {
   createModel() {
     if (this.deviceType === 'Huawei SUN2000 inverter') {
       return {
+        manufacturer: 'Huawei',
         phaseVoltage: [230.4, 231.2, 229.8],
+        pvVoltage: [610.2, 608.4, 605.1, 600.8],
         frequency: 50.03,
-        deratingRaw: 1000, // 0-1000 (0.1% steps), register 40125
-        fixedDeratingW: 0, // register 40126 (0 = disabled)
+        deratingRaw: 1000, // 0-1000 (0.1% steps), register 40201
+        fixedDeratingW: 0, // register 40206 (0 = disabled)
+        remoteControl: 1, // register 40200
+        pfCommand: 0, // register 40208
+        zeroExportMode: 0, // register 40212
+        maxFeedInW: 0, // register 40213 (0 = unlimited)
+        batteryMaxChargeW: 50000,
+        batteryMaxDischargeW: 50000,
+        batteryForceCommand: 0, // register 47086
+        batterySoc: 78.5,
+        batteryDailyChargeKwh: 12.34,
+        batteryDailyDischargeKwh: 9.87,
+        meterImportKwh: 4521.3,
+        meterExportKwh: 218.7,
         totalYieldKwh: 128734.55,
         dailyYieldKwh: 412.7,
         startedAt: null,
@@ -281,9 +295,9 @@ class SimulatorDevice {
       getHoldingRegister: (address, unitId) => this.read(REGISTER_TYPES.HOLDING, address, unitId),
       getInputRegister: (address, unitId) => this.read(REGISTER_TYPES.INPUT, address, unitId),
       getMultipleHoldingRegisters: (address, length, unitId) =>
-        Array.from({ length }, (_, offset) => this.read(REGISTER_TYPES.HOLDING, address + offset, unitId)),
+        this.readMany(REGISTER_TYPES.HOLDING, address, length, unitId),
       getMultipleInputRegisters: (address, length, unitId) =>
-        Array.from({ length }, (_, offset) => this.read(REGISTER_TYPES.INPUT, address + offset, unitId)),
+        this.readMany(REGISTER_TYPES.INPUT, address, length, unitId),
       setCoil: (address, _value, unitId) => this.unavailable(REGISTER_TYPES.COIL, address, unitId),
       setRegister: (address, value, unitId) => this.write(REGISTER_TYPES.HOLDING, address, [value], unitId),
       setRegisterArray: (address, values, unitId) =>
@@ -295,6 +309,21 @@ class SimulatorDevice {
         0x03: 'Zero Export device simulator',
       }),
     };
+  }
+
+  /** Per-profile FC03/FC04 batch limit (Huawei SUN2000: 15 registers). */
+  batchLimit() {
+    return this.profile?.maxReadQuantity || 125;
+  }
+
+  readMany(registerType, address, length, unitId) {
+    if (length > this.batchLimit()) {
+      throw modbusError(
+        `Read quantity ${length} exceeds the ${this.batchLimit()} register batch limit of this device.`,
+        0x03,
+      );
+    }
+    return Array.from({ length }, (_, offset) => this.read(registerType, address + offset, unitId));
   }
 
   unavailable(registerType, address, unitId) {
@@ -342,8 +371,23 @@ class SimulatorDevice {
     if (definition.key === 'active_power_derating') {
       this.model.deratingRaw = Math.round(decoded.value / 0.1);
     }
-    if (definition.key === 'active_power_fixed_derating') {
+    if (definition.key === 'active_power_fixed_limit') {
       this.model.fixedDeratingW = decoded.value;
+    }
+    if (definition.key === 'remote_power_control_enable') {
+      this.model.remoteControl = Math.round(decoded.value);
+    }
+    if (definition.key === 'reactive_power_pf_command') {
+      this.model.pfCommand = decoded.value;
+    }
+    if (definition.key === 'zero_export_mode') {
+      this.model.zeroExportMode = Math.round(decoded.value);
+    }
+    if (definition.key === 'max_grid_feed_in_power') {
+      this.model.maxFeedInW = Math.round(decoded.value);
+    }
+    if (definition.key === 'battery_force_control_command') {
+      this.model.batteryForceCommand = Math.round(decoded.value);
     }
 
     return rawValues;
@@ -581,10 +625,12 @@ class SimulatorDevice {
     const options = this.configuration.options;
 
     model.phaseVoltage = model.phaseVoltage.map((v) => drift(v, 0.5, 225, 240));
+    model.pvVoltage = model.pvVoltage.map((v) => drift(v, 1.2, 580, 640));
     model.frequency = drift(model.frequency, 0.02, 49.9, 50.1);
 
     const ratingKw = options.ratingKw || 100;
     const availabilityPct = clamp(options.availabilityPct ?? 100, 0, 100);
+    const loadKw = options.loadKw ?? 100;
 
     const deratingFraction = clamp(model.deratingRaw, 0, 1000) / 1000;
     let outputKw = ratingKw * (availabilityPct / 100) * deratingFraction;
@@ -600,8 +646,52 @@ class SimulatorDevice {
     const avgVoltage = model.phaseVoltage.reduce((a, b) => a + b, 0) / 3;
     const pf = 0.99;
     const current = (outputKw * 1000) / (3 * avgVoltage * pf);
+    const dcPowerKw = outputKw / 0.983;
+    const pvCurrents = model.pvVoltage.map((voltage) => {
+      const currentPerString = (dcPowerKw * 1000) / 4 / voltage;
+      return clamp(currentPerString, 0.5, 25);
+    });
+
+    // The inverter's own external-meter view mirrors the grid connection:
+    // grid = load - inverter output (import positive, export negative).
+    const gridW = (loadKw - outputKw) * 1000;
+    const importKw = Math.max(gridW, 0) / 1000;
+    const exportKw = Math.max(-gridW, 0) / 1000;
+    model.meterImportKwh += importKw * dtHours;
+    model.meterExportKwh += exportKw * dtHours;
+
+    const running = model.startedAt ? true : false;
+    const state1 = running
+      ? (2 | 4 | (model.deratingRaw < 1000 ? 8 : 0)) // grid connected + normal + derating?
+      : 0;
+    const state2 = running ? (1 | 4) : 0; // PV connected + DSP collection
+
+    const meterCurrents = (Math.abs(gridW) / 3) / (avgVoltage * 0.99);
 
     return {
+      model_name: 'SUN2000-100KTL-M0',
+      serial_number: 'SN0123456789',
+      pn_code: 'PN0100123456',
+      model_id: 1,
+      pv_strings_count: 4,
+      mppt_count: 2,
+      rated_power: ratingKw,
+      max_active_power: ratingKw * 1.1,
+      max_apparent_power: ratingKw * 1.1,
+      state_1: state1,
+      state_2: state2,
+      alarm_1: 0,
+      alarm_2: 0,
+      alarm_3: 0,
+      pv1_voltage: model.pvVoltage[0],
+      pv1_current: pvCurrents[0],
+      pv2_voltage: model.pvVoltage[1],
+      pv2_current: pvCurrents[1],
+      pv3_voltage: model.pvVoltage[2],
+      pv3_current: pvCurrents[2],
+      pv4_voltage: model.pvVoltage[3],
+      pv4_current: pvCurrents[3],
+      total_input_power: dcPowerKw,
       uab_voltage: model.phaseVoltage[0] * Math.sqrt(3),
       ubc_voltage: model.phaseVoltage[1] * Math.sqrt(3),
       uca_voltage: model.phaseVoltage[2] * Math.sqrt(3),
@@ -612,11 +702,42 @@ class SimulatorDevice {
       phase_b_current: current,
       phase_c_current: current,
       active_power: outputKw,
+      reactive_power: outputKw * 0.1,
+      power_factor: pf,
       grid_frequency: model.frequency,
+      efficiency: 98.3,
+      cabinet_temperature: 42.5,
+      insulation_resistance: 50.0,
+      device_status: running ? 1 : 2,
       total_yield: model.totalYieldKwh,
       daily_yield: model.dailyYieldKwh,
-      active_power_derating: (model.deratingRaw * 0.1), // engineering % for read-back
-      active_power_fixed_derating: model.fixedDeratingW,
+      battery_status: 2,
+      battery_charge_discharge_power: -800,
+      battery_soc: model.batterySoc,
+      battery_daily_charge_energy: model.batteryDailyChargeKwh,
+      battery_daily_discharge_energy: model.batteryDailyDischargeKwh,
+      meter_status: 1,
+      meter_phase_a_voltage: model.phaseVoltage[0],
+      meter_phase_b_voltage: model.phaseVoltage[1],
+      meter_phase_c_voltage: model.phaseVoltage[2],
+      meter_phase_a_current: meterCurrents,
+      meter_phase_b_current: meterCurrents,
+      meter_phase_c_current: meterCurrents,
+      meter_grid_active_power: gridW,
+      meter_grid_reactive_power: Math.abs(gridW) * 0.1,
+      meter_power_factor: 0.99,
+      meter_frequency: model.frequency,
+      meter_total_export_energy: model.meterExportKwh,
+      meter_total_import_energy: model.meterImportKwh,
+      remote_power_control_enable: model.remoteControl,
+      active_power_derating: model.deratingRaw * 0.1, // engineering % for read-back
+      active_power_fixed_limit: model.fixedDeratingW,
+      reactive_power_pf_command: model.pfCommand,
+      zero_export_mode: model.zeroExportMode,
+      max_grid_feed_in_power: model.maxFeedInW,
+      battery_max_charge_power_limit: model.batteryMaxChargeW,
+      battery_max_discharge_power_limit: model.batteryMaxDischargeW,
+      battery_force_control_command: model.batteryForceCommand,
     };
   }
 

@@ -144,6 +144,7 @@ const createRegisterProfileBodySchema = z
       });
     }),
     isActive: z.boolean().default(true),
+    maxReadQuantity: z.number().int().min(1).max(125).optional(),
     tags: tagsSchema.default([]),
     metadata: metadataSchema.optional(),
   })
@@ -183,6 +184,7 @@ const updateRegisterProfileBodySchema = z
     model: z.string().trim().min(1).max(120).nullable().optional(),
     registers: z.array(registerDefinitionSchema).min(1).max(500).optional(),
     isActive: z.boolean().optional(),
+    maxReadQuantity: z.number().int().min(1).max(125).optional(),
     tags: tagsSchema.optional(),
     metadata: metadataSchema.optional(),
   })

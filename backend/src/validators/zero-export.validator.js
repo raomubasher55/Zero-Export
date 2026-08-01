@@ -15,7 +15,7 @@ const zeroExportConfigurationSchema = z
       .string()
       .trim()
       .regex(/^[A-Za-z][A-Za-z0-9_]{0,63}$/, 'Use a valid register key.'),
-    inverterRegisterAddress: z.number().int().min(0).max(65535).default(40125),
+    inverterRegisterAddress: z.number().int().min(0).max(65535).default(40201),
     targetGridKw: z.number().finite().default(0),
     deadbandKw: z.number().finite().min(0).max(10000).default(0.5),
     stepPerCycle: z.number().int().min(1).max(1000).default(20),

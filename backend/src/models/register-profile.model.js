@@ -167,6 +167,14 @@ const registerProfileSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    // Per-profile read-batch limit (registers per FC03/FC04 request). Some
+    // devices (e.g. Huawei SUN2000) reject batches above 15 registers.
+    maxReadQuantity: {
+      type: Number,
+      min: 1,
+      max: 125,
+      default: undefined,
+    },
     tags: {
       type: [String],
       default: [],

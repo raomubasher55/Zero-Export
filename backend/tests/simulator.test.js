@@ -95,16 +95,16 @@ test('Huawei simulator serves holding registers and accepts derating writes', as
   const power = decodeRegister(HUAWEI_BY_KEY.get('active_power'), powerWords);
   assert.ok(power.value > 40 && power.value < 85, `derated power in range, got ${power.value} kW`);
 
-  // FC06 write to 40125: 500 -> 50%
-  vector.setRegister(40125, 500, 2);
+  // FC06 write to 40201: 500 -> 50%
+  vector.setRegister(40201, 500, 2);
   assert.equal(instance.model.deratingRaw, 500);
 
-  const deratingWords = vector.getMultipleHoldingRegisters(40125, 1, 2);
+  const deratingWords = vector.getMultipleHoldingRegisters(40201, 1, 2);
   const derating = decodeRegister(HUAWEI_BY_KEY.get('active_power_derating'), deratingWords);
   assert.equal(derating.value, 50, 'read-back shows 50%');
 
-  // FC16 write to 40126 (INT32, 2 registers): 30000 W
-  vector.setRegisterArray(40126, [0, 30000], 2);
+  // FC16 write to 40206 (INT32, 2 registers): 30000 W
+  vector.setRegisterArray(40206, [0, 30000], 2);
   assert.equal(instance.model.fixedDeratingW, 30000);
 
   // The simulated inverter reacts on its next update cycle.
@@ -113,6 +113,29 @@ test('Huawei simulator serves holding registers and accepts derating writes', as
   const cappedPower = decodeRegister(HUAWEI_BY_KEY.get('active_power'), cappedPowerWords);
   // The simulator applies ±3% output jitter after the 30 kW cap.
   assert.ok(cappedPower.value <= 31, `fixed derating caps output, got ${cappedPower.value} kW`);
+
+  // Full register map is served: identification strings, states, PV, meter.
+  const modelName = vector.getMultipleHoldingRegisters(30000, 15, 2);
+  const modelDecoded = decodeRegister(HUAWEI_BY_KEY.get('model_name'), modelName);
+  assert.ok(String(modelDecoded.value).startsWith('SUN2000'), `model name served, got ${modelDecoded.value}`);
+
+  const state1 = vector.getMultipleHoldingRegisters(32000, 1, 2);
+  assert.ok(state1[0] & 4, 'State 1 normal bit set');
+
+  const meterPower = vector.getMultipleHoldingRegisters(37113, 2, 2);
+  const meterPowerDecoded = decodeRegister(HUAWEI_BY_KEY.get('meter_grid_active_power'), meterPower);
+  assert.ok(Number.isFinite(meterPowerDecoded.value), 'meter grid power served');
+
+  assert.throws(
+    () => vector.getMultipleHoldingRegisters(32066, 16, 2),
+    (error) => error.modbusErrorCode === 0x03,
+    'reads above 15 registers must be rejected like the real SUN2000',
+  );
+  // A 15-word read of a fully defined block is allowed (model name).
+  assert.doesNotThrow(
+    () => vector.getMultipleHoldingRegisters(30000, 15, 2),
+    'reads up to 15 registers are allowed',
+  );
 
   assert.throws(
     () => vector.setRegister(32080, 1, 2),

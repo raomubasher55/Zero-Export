@@ -10,7 +10,7 @@ const DEFAULT_CONFIGURATION = Object.freeze({
   meterRegisterKey: 'eqv_active_power',
   inverterDeviceId: null,
   inverterRegisterKey: 'active_power_derating',
-  inverterRegisterAddress: 40125,
+  inverterRegisterAddress: 40201,
   targetGridKw: 0,
   deadbandKw: 0.5,
   stepPerCycle: 20,

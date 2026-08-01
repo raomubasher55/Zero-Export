@@ -129,7 +129,7 @@ class DevicePollingService {
         });
       }
 
-      plan = buildReadPlan(profile.registers);
+      plan = buildReadPlan(profile.registers, profile.maxReadQuantity);
       if (plan.length === 0) {
         throw new PollingError('The register profile has no enabled registers to poll.', {
           code: ERROR_CODES.REGISTER_PROFILE_UNAVAILABLE,

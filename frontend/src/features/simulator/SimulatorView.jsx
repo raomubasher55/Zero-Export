@@ -162,7 +162,13 @@ export function SimulatorView({ devices, profiles, notify, onForwardProfile }) {
       };
     }
     if (deviceKey === "em500") {
-      payload.options = { loadKw: Number(form.loadKw) };
+      const loadKw = Number(form.loadKw);
+      payload.options = { loadKw };
+      // The Huawei inverter mirrors the same grid point, so keep its load
+      // setting in sync too.
+      void api
+        .updateSimulatorDevice("huawei", { options: { loadKw } })
+        .catch(() => undefined);
     }
     return run(
       deviceKey,
@@ -264,11 +270,11 @@ export function SimulatorView({ devices, profiles, notify, onForwardProfile }) {
     try {
       await api.rawWrite(deviceRef._id, {
         registerType: "HOLDING_REGISTER",
-        address: 40125,
+        address: 40201,
         values: [Math.round(pct * 10)],
       });
       notify(
-        `Inverter derating set to ${pct}% (raw ${Math.round(pct * 10)} on register 40125).`,
+        `Inverter derating set to ${pct}% (raw ${Math.round(pct * 10)} on register 40201).`,
       );
     } catch (writeError) {
       notify(
