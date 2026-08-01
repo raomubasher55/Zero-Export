@@ -108,6 +108,8 @@ function serviceWith({ meterValue, inverterValue, writeHandler } = {}) {
     deviceRepository: {
       findById: async (id) =>
         String(id) === METER_ID ? meterDevice() : inverterDevice(),
+      findByIdForPolling: async (id) =>
+        String(id) === METER_ID ? meterDevice() : inverterDevice(),
     },
     latestValueRepository: {
       findByDeviceAndKey: async (deviceId, key) => {
@@ -215,6 +217,7 @@ test('zero-export hydrate validates devices and derives the write address', asyn
   const service = new ZeroExportService({
     deviceRepository: {
       findById: async (id) => (String(id) === METER_ID ? meterDevice() : inverterDevice()),
+      findByIdForPolling: async (id) => (String(id) === METER_ID ? meterDevice() : inverterDevice()),
     },
     logger: { info: () => undefined, warn: () => undefined, error: () => undefined },
   });

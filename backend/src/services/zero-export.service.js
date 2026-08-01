@@ -177,8 +177,8 @@ class ZeroExportService {
   /** Validate devices and register keys, derive the write address. */
   async hydrate(input) {
     const [meterDevice, inverterDevice] = await Promise.all([
-      this.deviceRepository.findById(input.meterDeviceId),
-      this.deviceRepository.findById(input.inverterDeviceId),
+      this.deviceRepository.findByIdForPolling(input.meterDeviceId),
+      this.deviceRepository.findByIdForPolling(input.inverterDeviceId),
     ]);
 
     if (!meterDevice) {
