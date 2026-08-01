@@ -11,7 +11,7 @@ const { pollingScheduler } = require('./jobs/polling-scheduler');
 const { gatewayService } = require('./services/gateway.service');
 const { zeroExportService } = require('./services/zero-export.service');
 const { ensureBuiltinProfiles } = require('./seed/builtin-profiles');
-const { stopAll } = require('./simulator');
+const { startAll, stopAll } = require('./simulator');
 
 let server;
 let shuttingDown = false;
@@ -65,6 +65,20 @@ async function bootstrap() {
 
   if (config.seeding.builtinProfiles) {
     await ensureBuiltinProfiles();
+  }
+
+  if (config.simulator.autoStart) {
+    try {
+      const status = await startAll();
+      logger.info('Device simulators started', {
+        em500: status.devices.em500.state,
+        huawei: status.devices.huawei.state,
+      });
+    } catch (error) {
+      logger.error('Unable to start the device simulators', {
+        error: error.stack || error.message,
+      });
+    }
   }
 
   await gatewayService.initialize().catch((error) => {

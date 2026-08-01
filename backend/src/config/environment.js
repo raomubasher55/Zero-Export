@@ -136,6 +136,11 @@ const config = Object.freeze({
   monitoring: Object.freeze({
     communicationLogRetentionDays: readInteger('COMMUNICATION_LOG_RETENTION_DAYS', 90, { min: 1, max: 3650 }),
   }),
+  simulator: Object.freeze({
+    // Simulators are test slaves; start them automatically on boot in
+    // development so the controller and polls always find them online.
+    autoStart: readBoolean('SIMULATOR_AUTO_START', environment !== 'production'),
+  }),
   seeding: Object.freeze({
     builtinProfiles: readBoolean('SEED_BUILTIN_PROFILES', true),
   }),
