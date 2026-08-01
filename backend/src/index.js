@@ -9,6 +9,7 @@ const { modbusGatewayRuntime } = require('./gateway/modbus-gateway-runtime');
 const { modbusConnectionManager } = require('./modbus/connection-manager');
 const { pollingScheduler } = require('./jobs/polling-scheduler');
 const { gatewayService } = require('./services/gateway.service');
+const { ensureBuiltinProfiles } = require('./seed/builtin-profiles');
 
 let server;
 let shuttingDown = false;
@@ -57,6 +58,10 @@ async function shutdown(reason, exitCode = 0) {
 
 async function bootstrap() {
   await connectDatabase();
+
+  if (config.seeding.builtinProfiles) {
+    await ensureBuiltinProfiles();
+  }
 
   await gatewayService.initialize().catch((error) => {
     logger.error('Unable to initialize the Modbus forwarding gateway', {

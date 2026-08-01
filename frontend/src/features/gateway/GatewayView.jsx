@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ArrowRightLeft,
   CirclePlus,
+  Copy,
   LoaderCircle,
   Play,
   Radio,
@@ -20,6 +21,14 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { ErrorBanner, InlineLoader } from "@/components/common/Feedback";
@@ -35,6 +44,7 @@ import {
   createGatewayForm,
   gatewayPayload,
   mappingFromSource,
+  mappingToForm,
 } from "./gatewayForm";
 
 const FIXED_LENGTHS = {
@@ -43,6 +53,8 @@ const FIXED_LENGTHS = {
   UINT16: 1,
   INT32: 2,
   UINT32: 2,
+  INT64: 4,
+  UINT64: 4,
   FLOAT32: 2,
   FLOAT64: 4,
 };
@@ -80,6 +92,12 @@ export function GatewayView({ devices, profiles, notify }) {
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState(false);
   const [error, setError] = useState("");
+  const [mirrorOpen, setMirrorOpen] = useState(false);
+  const [mirrorDeviceId, setMirrorDeviceId] = useState("");
+  const [mirrorRegisterType, setMirrorRegisterType] = useState("");
+  const [mirrorOffset, setMirrorOffset] = useState("0");
+  const [mirroring, setMirroring] = useState(false);
+  const [mirrorError, setMirrorError] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -208,6 +226,66 @@ export function GatewayView({ devices, profiles, notify }) {
       mappings: current.mappings.filter((_, itemIndex) => itemIndex !== index),
     }));
 
+  const mirrorableDevices = useMemo(
+    () =>
+      devices.filter((device) => {
+        const profileId = device?.registerProfile?._id;
+        const profile = profilesById.get(String(profileId));
+        return (
+          profile?.registers?.some((register) => register.enabled !== false)
+        );
+      }),
+    [devices, profilesById],
+  );
+
+  const generateMirrorMappings = async () => {
+    if (!mirrorDeviceId) {
+      setMirrorError("Select the source device whose register map should be mirrored.");
+      return;
+    }
+    setMirroring(true);
+    setMirrorError("");
+    try {
+      const response = await api.generateGatewayMappings({
+        sourceDeviceId: mirrorDeviceId,
+        registerType: mirrorRegisterType || undefined,
+        addressOffset: Number(mirrorOffset || 0),
+      });
+      const generated = (response.data.mappings || []).map(mappingToForm);
+      let added = 0;
+      let skipped = 0;
+      setForm((current) => {
+        const existingKeys = new Set(
+          current.mappings.map((mapping) => mapping.key),
+        );
+        const fresh = generated.filter((mapping) => {
+          if (existingKeys.has(mapping.key)) {
+            skipped += 1;
+            return false;
+          }
+          return true;
+        });
+        added = fresh.length;
+        return { ...current, mappings: [...current.mappings, ...fresh] };
+      });
+      const device = devices.find(
+        (item) => String(item._id) === String(mirrorDeviceId),
+      );
+      notify(
+        `${added} register${added === 1 ? "" : "s"} from ${
+          device?.name || "the device"
+        } mirrored at the same addresses${
+          skipped ? ` (${skipped} already present)` : ""
+        }. Review then save.`,
+      );
+      setMirrorOpen(false);
+    } catch (mirrorGenerationError) {
+      setMirrorError(getErrorMessage(mirrorGenerationError));
+    } finally {
+      setMirroring(false);
+    }
+  };
+
   const run = async (operation, successMessage) => {
     setWorking(true);
     setError("");
@@ -254,6 +332,18 @@ export function GatewayView({ devices, profiles, notify }) {
             <Link to="/gateway/traffic">
               <Radio className="h-4 w-4" /> Analyze client requests
             </Link>
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => setMirrorOpen(true)}
+            disabled={mirrorableDevices.length === 0}
+            title={
+              mirrorableDevices.length === 0
+                ? "Create a device with an active register profile first."
+                : "Generate one mapping per register using the meter's own addresses."
+            }
+          >
+            <Copy className="h-4 w-4" /> Mirror device profile
           </Button>
           <Button variant="outline" onClick={load} disabled={working}>
             <RotateCcw className="h-4 w-4" /> Refresh
@@ -470,6 +560,78 @@ export function GatewayView({ devices, profiles, notify }) {
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={mirrorOpen} onOpenChange={setMirrorOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Mirror device register map</DialogTitle>
+            <DialogDescription>
+              Generate one forwarding mapping per register of the selected
+              device's profile. Addresses stay identical to the meter (optionally
+              offset), so a downstream controller reads the gateway exactly like
+              the physical device. Review the generated rows, then save.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <Field label="Source device" required>
+              <Select
+                value={mirrorDeviceId}
+                onChange={(event) => setMirrorDeviceId(event.target.value)}
+                options={mirrorableDevices.map((device) => ({
+                  value: String(device._id),
+                  label: `${device.name} (${device.identifier})`,
+                }))}
+                placeholder="Select a device with a register profile"
+              />
+            </Field>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field
+                label="Slave area"
+                hint="Same area keeps FC04 input registers like the EM500; holding registers expose the same addresses over FC03."
+              >
+                <Select
+                  value={mirrorRegisterType}
+                  onChange={(event) => setMirrorRegisterType(event.target.value)}
+                  options={[
+                    { value: "", label: "Same as source" },
+                    ...REGISTER_TYPES.map((value) => ({
+                      value,
+                      label: value.replaceAll("_", " "),
+                    })),
+                  ]}
+                />
+              </Field>
+              <Field label="Address offset" hint="0 mirrors the manual's exact addresses.">
+                <Input
+                  type="number"
+                  min="0"
+                  max="65535"
+                  value={mirrorOffset}
+                  onChange={(event) => setMirrorOffset(event.target.value)}
+                />
+              </Field>
+            </div>
+            {mirrorError && <ErrorBanner message={mirrorError} />}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setMirrorOpen(false)}
+              disabled={mirroring}
+            >
+              Cancel
+            </Button>
+            <Button onClick={generateMirrorMappings} disabled={mirroring}>
+              {mirroring ? (
+                <LoaderCircle className="h-4 w-4 animate-spin" />
+              ) : (
+                <Copy className="h-4 w-4" />
+              )}
+              Generate &amp; add to map
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

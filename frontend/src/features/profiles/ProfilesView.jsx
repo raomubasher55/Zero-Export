@@ -133,16 +133,26 @@ export function ProfilesView({
                       {profile.identifier}
                     </CardDescription>
                   </div>
-                  <Badge
-                    variant="outline"
-                    className={
-                      profile.isActive
-                        ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                        : "border-slate-200 bg-slate-100 text-slate-600"
-                    }
-                  >
-                    {profile.isActive ? "Active" : "Inactive"}
-                  </Badge>
+                  <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
+                    {profile.builtIn && (
+                      <Badge
+                        variant="outline"
+                        className="border-indigo-200 bg-indigo-50 text-indigo-700"
+                      >
+                        Built-in
+                      </Badge>
+                    )}
+                    <Badge
+                      variant="outline"
+                      className={
+                        profile.isActive
+                          ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                          : "border-slate-200 bg-slate-100 text-slate-600"
+                      }
+                    >
+                      {profile.isActive ? "Active" : "Inactive"}
+                    </Badge>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent className="flex flex-1 flex-col">

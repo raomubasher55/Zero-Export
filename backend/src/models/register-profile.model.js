@@ -163,6 +163,10 @@ const registerProfileSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    builtIn: {
+      type: Boolean,
+      default: false,
+    },
     tags: {
       type: [String],
       default: [],

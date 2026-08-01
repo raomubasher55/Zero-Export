@@ -3,7 +3,7 @@
 const logger = require('../config/logger');
 const ERROR_CODES = require('../constants/error-codes');
 const HTTP_STATUS = require('../constants/http-status');
-const { REGISTER_TYPES } = require('../constants/modbus');
+const { REGISTER_DATA_TYPES, REGISTER_TYPES } = require('../constants/modbus');
 const { modbusGatewayRuntime } = require('../gateway/modbus-gateway-runtime');
 const DeviceRepository = require('../repositories/device.repository');
 const {
@@ -115,6 +115,107 @@ class GatewayService {
     const configuration = await this.configurationRepository.getOrDefault();
     const saved = await this.configurationRepository.save({ ...configuration, enabled: false });
     return this.present(saved);
+  }
+
+  /**
+   * Build a forwarding mapping for every enabled register of a device's
+   * assigned profile. Addresses and data layout mirror the source profile so
+   * a downstream controller can read the gateway exactly like the physical
+   * meter ("same addresses" forwarding). Nothing is persisted here; the
+   * operator reviews the generated mappings and saves them with PUT /gateway.
+   */
+  async generateMappings({ sourceDeviceId, registerType, addressOffset = 0 }) {
+    const [device] = await this.deviceRepository.findManyByIdsWithProfiles([sourceDeviceId]);
+    if (!device) {
+      throw new AppError('Source device was not found.', {
+        statusCode: HTTP_STATUS.NOT_FOUND,
+        code: ERROR_CODES.NOT_FOUND,
+      });
+    }
+
+    const profile = device.registerProfile;
+    if (!profile || !Array.isArray(profile.registers) || profile.registers.length === 0) {
+      throw validationError('The selected device has no register profile with registers to forward.');
+    }
+
+    const targetBitArea = [REGISTER_TYPES.COIL, REGISTER_TYPES.DISCRETE_INPUT].includes(registerType);
+    const issues = [];
+    const mappings = [];
+
+    for (const register of profile.registers) {
+      if (register.enabled === false) {
+        continue;
+      }
+
+      const area = registerType || register.registerType;
+      const address = register.address + addressOffset;
+
+      if (address + register.length > 65536) {
+        issues.push({
+          field: `registers.${register.key}`,
+          message: `Address ${address} (0x${address.toString(16).toUpperCase()}) exceeds the 65535 address limit with an offset of ${addressOffset}.`,
+          code: 'address_range',
+        });
+        continue;
+      }
+
+      if (targetBitArea && register.dataType !== REGISTER_DATA_TYPES.BIT) {
+        issues.push({
+          field: `registers.${register.key}`,
+          message: `Only BIT registers can be forwarded to a coil/discrete-input area (${register.key} is ${register.dataType}).`,
+          code: 'incompatible_area',
+        });
+        continue;
+      }
+
+      mappings.push({
+        key: register.key,
+        name: register.name,
+        sourceDeviceId,
+        sourceRegisterKey: register.key,
+        registerType: area,
+        address,
+        dataType: register.dataType,
+        length: targetBitArea ? 1 : register.length,
+        byteOrder: register.byteOrder,
+        wordOrder: register.wordOrder,
+        bitIndex: targetBitArea ? 0 : (register.bitIndex ?? 0),
+        scaleFactor: register.scaleFactor ?? 1,
+        offset: register.offset ?? 0,
+        unit: register.unit ?? null,
+        writable: Boolean(
+          register.writable &&
+            [REGISTER_TYPES.COIL, REGISTER_TYPES.HOLDING].includes(area),
+        ),
+        enabled: true,
+      });
+    }
+
+    if (issues.length > 0) {
+      throw validationError('Unable to mirror the source profile as forwarding mappings.', issues);
+    }
+
+    if (mappings.length === 0) {
+      throw validationError('The selected profile has no enabled registers to forward.');
+    }
+
+    return {
+      sourceDevice: {
+        _id: String(device._id),
+        identifier: device.identifier,
+        name: device.name,
+      },
+      sourceProfile: {
+        _id: String(profile._id),
+        identifier: profile.identifier,
+        name: profile.name,
+        model: profile.model ?? null,
+      },
+      registerType: registerType || null,
+      addressOffset,
+      mappings,
+      count: mappings.length,
+    };
   }
 
   async hydrate(configuration) {

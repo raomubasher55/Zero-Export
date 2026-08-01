@@ -8,6 +8,7 @@ class GatewayController {
     this.service = service;
     this.get = this.get.bind(this);
     this.update = this.update.bind(this);
+    this.generateMappings = this.generateMappings.bind(this);
     this.start = this.start.bind(this);
     this.stop = this.stop.bind(this);
   }
@@ -18,6 +19,10 @@ class GatewayController {
 
   async update(req, res) {
     return sendSuccess(res, { data: await this.service.update(req.validated.body) });
+  }
+
+  async generateMappings(req, res) {
+    return sendSuccess(res, { data: await this.service.generateMappings(req.validated.body) });
   }
 
   async start(_req, res) {

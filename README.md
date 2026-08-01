@@ -27,8 +27,9 @@ repository/model, route, and validation boundaries.
 - Mongoose **RegisterProfile** model containing a validated, reusable Modbus
   register map.
 - Register definition validation for holding/input/coils/discrete inputs;
-  `INT16`, `UINT16`, `INT32`, `UINT32`, `FLOAT32`, `FLOAT64`, `STRING`, and
-  `BIT`; byte/word ordering; scaling; bit extraction; and address ranges.
+  `INT16`, `UINT16`, `INT32`, `UINT32`, `INT64`, `UINT64`, `FLOAT32`,
+  `FLOAT64`, `STRING`, and `BIT`; byte/word ordering; scaling; bit extraction;
+  and address ranges.
 - Repository, service, controller, route, and Zod validator layers for both
   resources.
 - Referential checks: only active register profiles may be assigned to a
@@ -54,9 +55,9 @@ repository/model, route, and validation boundaries.
 
 ### Step 4 — decoding, durable monitoring, and scheduled polling
 
-- Register decoder for `INT16`, `UINT16`, `INT32`, `UINT32`, `FLOAT32`,
-  `FLOAT64`, `STRING`, and `BIT`, including byte order, word order, scaling,
-  offset, and bit extraction.
+- Register decoder for `INT16`, `UINT16`, `INT32`, `UINT32`, `INT64`, `UINT64`,
+  `FLOAT32`, `FLOAT64`, `STRING`, and `BIT`, including byte order, word order,
+  scaling, offset, and bit extraction.
 - Register-read planner that combines contiguous/overlapping profile entries
   safely within Modbus function-code quantity limits.
 - `LatestValue` persistence with one upserted current value per device/register.
@@ -119,6 +120,34 @@ repository/model, route, and validation boundaries.
   temperature, full storage, down configured links, and high V8 heap use.
 - The routed `/system` page refreshes live data every three seconds. System
   samples are not stored in MongoDB or written to monitoring files.
+
+### Step 8 — built-in EM500 profile and same-address gateway forwarding
+
+- A built-in **Eastron EM500** register profile ships with the backend
+  (`backend/src/seed/em500.profile.js`) and is seeded once on startup when its
+  `em500` identifier is missing. Existing profiles are never overwritten; set
+  `SEED_BUILTIN_PROFILES=false` to disable seeding entirely.
+- The profile mirrors the EM500 register data manual: 33 instantaneous
+  measurements (2-word `UINT32`/`INT32`, input registers) and 35 energy
+  counters (4-word 64-bit values), all with the manual's scaling
+  (V/100, A/10000, W/100, var/100, VA/100, Hz/1000, PF/10000, %/100,
+  kWh/kvarh/kVAh per 100).
+- New **`INT64`/`UINT64`** register data types decode and encode 64-bit
+  counters across four Modbus words (big-endian by default, byte/word order
+  configurable) for the EM500's 4-word energy registers.
+- Built-in profiles are flagged `builtIn: true` in the API and UI; the flag is
+  server-managed and excluded from portable import/export files.
+- `POST /api/v1/gateway/mappings/generate` builds one forwarding mapping per
+  enabled profile register using the meter's **same addresses** (same Modbus
+  area by default, or a chosen area such as holding registers with the same
+  address numbers, plus an optional address offset). Nothing is persisted by
+  this endpoint: the generated rows are returned for review and saved with the
+  regular `PUT /api/v1/gateway` update.
+- The Gateway page gains **Mirror device profile**: pick a device (e.g. the
+  EM500 meter), optionally choose the slave area and offset, and the full
+  register map is added to the forwarding table at the meter's own addresses —
+  a downstream controller can then read the gateway exactly like the physical
+  meter.
 
 ## Prerequisites
 
@@ -524,6 +553,8 @@ settings are:
   lease duration.
 - `COMMUNICATION_LOG_RETENTION_DAYS` — MongoDB TTL retention for high-volume
   durable communication metadata.
+- `SEED_BUILTIN_PROFILES` — seeds the built-in Eastron EM500 register profile
+  once when its identifier is missing; existing profiles are never overwritten.
 
 Never commit `.env` files or Modbus gateway credentials.
 
@@ -582,11 +613,14 @@ endpoint. It provides an operations dashboard for:
 - Backend/MongoDB health and polling-scheduler state.
 - Device and Register Profile CRUD, including TCP/RTU transport settings,
   polling/retry policy, editable register definitions, and portable JSON profile
-  import/export.
+  import/export. The Eastron EM500 profile is seeded automatically and shown
+  with a **Built-in** badge.
 - Device connection control, manual decoded polls, raw Modbus read/write tools,
   latest decoded values, and retained communication history.
 - A dedicated forwarding-gateway page for TCP/RTU slave endpoints, mirrored or
   custom output mappings, function-code visibility, and guarded write-through.
+  **Mirror device profile** adds the full register map of a device (such as the
+  EM500) at the meter's own addresses with one click.
 - An in-memory inverter request analyzer with live traffic, request patterns,
   address heat map, sessions, raw frame inspection, mapping suggestions, and
   candidate data-type/order previews.

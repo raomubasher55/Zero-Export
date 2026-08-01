@@ -18,6 +18,8 @@ export const DATA_TYPES = [
   "UINT16",
   "INT32",
   "UINT32",
+  "INT64",
+  "UINT64",
   "FLOAT32",
   "FLOAT64",
   "STRING",

@@ -49,6 +49,8 @@ function writeNumeric(buffer, dataType, rawValue, definition) {
     REGISTER_DATA_TYPES.UINT16,
     REGISTER_DATA_TYPES.INT32,
     REGISTER_DATA_TYPES.UINT32,
+    REGISTER_DATA_TYPES.INT64,
+    REGISTER_DATA_TYPES.UINT64,
   ].includes(dataType);
   const value = integerType ? Math.round(rawValue) : rawValue;
 
@@ -72,6 +74,12 @@ function writeNumeric(buffer, dataType, rawValue, definition) {
         break;
       case REGISTER_DATA_TYPES.UINT32:
         buffer.writeUInt32BE(value, 0);
+        break;
+      case REGISTER_DATA_TYPES.INT64:
+        buffer.writeBigInt64BE(BigInt(Math.round(value)), 0);
+        break;
+      case REGISTER_DATA_TYPES.UINT64:
+        buffer.writeBigUInt64BE(BigInt(Math.round(value)), 0);
         break;
       case REGISTER_DATA_TYPES.FLOAT32:
         buffer.writeFloatBE(value, 0);

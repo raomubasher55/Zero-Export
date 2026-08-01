@@ -136,6 +136,9 @@ const config = Object.freeze({
   monitoring: Object.freeze({
     communicationLogRetentionDays: readInteger('COMMUNICATION_LOG_RETENTION_DAYS', 90, { min: 1, max: 3650 }),
   }),
+  seeding: Object.freeze({
+    builtinProfiles: readBoolean('SEED_BUILTIN_PROFILES', true),
+  }),
 });
 
 function requireDatabaseUri() {

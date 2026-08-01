@@ -25,7 +25,13 @@ export function createGatewayForm(configuration) {
   };
 }
 
-function mappingToForm(mapping) {
+function safeKey(value) {
+  const normalized = value.replace(/[^A-Za-z0-9_]/g, "_");
+  return /^[A-Za-z]/.test(normalized) ? normalized.slice(0, 64) : `r_${normalized}`.slice(0, 64);
+}
+
+/** Converts an API mapping (from GET /gateway or the mirror generator) into form state. */
+export function mappingToForm(mapping) {
   return {
     key: mapping.key,
     name: mapping.name,
@@ -45,11 +51,6 @@ function mappingToForm(mapping) {
     writable: mapping.writable ?? false,
     enabled: mapping.enabled ?? true,
   };
-}
-
-function safeKey(value) {
-  const normalized = value.replace(/[^A-Za-z0-9_]/g, "_");
-  return /^[A-Za-z]/.test(normalized) ? normalized.slice(0, 64) : `r_${normalized}`.slice(0, 64);
 }
 
 export function mappingFromSource(device, register, index, current = {}) {

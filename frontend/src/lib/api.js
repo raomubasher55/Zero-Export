@@ -72,6 +72,8 @@ export const api = {
 
   getGateway: () => request('/gateway'),
   updateGateway: (payload) => request('/gateway', { method: 'PUT', body: payload }),
+  generateGatewayMappings: (payload) =>
+    request('/gateway/mappings/generate', { method: 'POST', body: payload }),
   startGateway: () => request('/gateway/start', { method: 'POST' }),
   stopGateway: () => request('/gateway/stop', { method: 'POST' }),
   listGatewayTraffic: (query) => request(`/gateway/traffic${toQueryString(query)}`),

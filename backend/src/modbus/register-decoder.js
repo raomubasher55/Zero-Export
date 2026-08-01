@@ -68,6 +68,12 @@ function decodeNumeric(buffer, dataType, definition) {
     case REGISTER_DATA_TYPES.UINT32:
       rawValue = buffer.readUInt32BE(0);
       break;
+    case REGISTER_DATA_TYPES.INT64:
+      rawValue = Number(buffer.readBigInt64BE(0));
+      break;
+    case REGISTER_DATA_TYPES.UINT64:
+      rawValue = Number(buffer.readBigUInt64BE(0));
+      break;
     case REGISTER_DATA_TYPES.FLOAT32:
       rawValue = buffer.readFloatBE(0);
       break;

@@ -108,6 +108,16 @@ const mappingSchema = z
     }
   });
 
+const generateMappingsSchema = z
+  .object({
+    sourceDeviceId: objectIdSchema,
+    // When omitted, each output mapping keeps its source register's own
+    // Modbus area (EM500 input registers stay FC04 with the same addresses).
+    registerType: z.enum(REGISTER_TYPE_VALUES).optional(),
+    addressOffset: z.number().int().min(0).max(65535).default(0),
+  })
+  .strict();
+
 const gatewayConfigurationSchema = z
   .object({
     enabled: z.boolean(),
@@ -157,5 +167,6 @@ const gatewayConfigurationSchema = z
 
 module.exports = {
   gatewayConfigurationSchema,
+  generateMappingsSchema,
   mappingSchema,
 };

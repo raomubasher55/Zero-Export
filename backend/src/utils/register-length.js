@@ -12,6 +12,8 @@ function expectedWordLength(dataType) {
     case REGISTER_DATA_TYPES.UINT32:
     case REGISTER_DATA_TYPES.FLOAT32:
       return 2;
+    case REGISTER_DATA_TYPES.INT64:
+    case REGISTER_DATA_TYPES.UINT64:
     case REGISTER_DATA_TYPES.FLOAT64:
       return 4;
     case REGISTER_DATA_TYPES.STRING:

@@ -120,7 +120,9 @@ export function DeviceDialog({ open, onOpenChange, device, profiles, onSave }) {
                   .filter((profile) => profile.isActive)
                   .map((profile) => ({
                     value: profile._id,
-                    label: profile.name,
+                    label: profile.builtIn
+                      ? `${profile.name} (Built-in)`
+                      : profile.name,
                   }))}
                 placeholder="No profile assigned"
               />
