@@ -10,6 +10,7 @@ const { modbusConnectionManager } = require('./modbus/connection-manager');
 const { pollingScheduler } = require('./jobs/polling-scheduler');
 const { gatewayService } = require('./services/gateway.service');
 const { ensureBuiltinProfiles } = require('./seed/builtin-profiles');
+const { meterSimulator } = require('./simulator/meter-simulator');
 
 let server;
 let shuttingDown = false;
@@ -34,6 +35,7 @@ async function shutdown(reason, exitCode = 0) {
 
     try {
       await pollingScheduler.stop();
+      await meterSimulator.stop();
       await modbusGatewayRuntime.stop();
       await modbusConnectionManager.shutdown();
       await disconnectDatabase();

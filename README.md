@@ -163,6 +163,29 @@ repository/model, route, and validation boundaries.
   a downstream controller can then read the gateway exactly like the physical
   meter.
 
+### Step 9 — EM500 meter simulator
+
+- A process-local **Modbus TCP meter simulator** (`backend/src/simulator/`)
+  serves the built-in Eastron EM500 register map with live, realistic values:
+  drifting phase voltages/currents/power factors, computed active/reactive/
+  apparent powers, frequency, asymmetries, and slowly accumulating 64-bit
+  energy counters.
+- Every register is encoded through the same encoder the gateway uses, so the
+  wire format (addresses, byte/word order, scaling, raw words) matches the
+  EM500 profile exactly — polling it exercises the exact same decode path as a
+  physical meter. Unmapped addresses and wrong unit IDs return proper Modbus
+  exception responses.
+- `GET /api/v1/simulator`, `PUT /api/v1/simulator`, `POST /api/v1/simulator/
+  start|stop`, and `GET /api/v1/simulator/values` manage the simulator and
+  expose its current values. The `/simulator` React page starts/stops it,
+  edits the endpoint (default `0.0.0.0:15020`, unit 1), and shows a live
+  values table grouped by Measurements/Energy.
+- The page can **Add simulator device** (creates a TCP device pointed at
+  `127.0.0.1:<simulator port>` with the built-in EM500 profile and 5-second
+  polling) and **Forward EM500 profile** to the forwarding gateway, so the
+  simulated meter flows through the exact poll → forward → downstream path as
+  a real meter.
+
 ## Prerequisites
 
 - Node.js **20.11+** (Node 22 LTS recommended)

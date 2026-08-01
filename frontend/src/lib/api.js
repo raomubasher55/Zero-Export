@@ -70,6 +70,12 @@ export const api = {
   getPollingStatus: () => request('/polling/status'),
   getSystemUsage: () => request('/system'),
 
+  getSimulator: () => request('/simulator'),
+  updateSimulator: (payload) => request('/simulator', { method: 'PUT', body: payload }),
+  startSimulator: () => request('/simulator/start', { method: 'POST' }),
+  stopSimulator: () => request('/simulator/stop', { method: 'POST' }),
+  getSimulatorValues: () => request('/simulator/values'),
+
   getGateway: () => request('/gateway'),
   updateGateway: (payload) => request('/gateway', { method: 'PUT', body: payload }),
   generateGatewayMappings: (payload) =>
