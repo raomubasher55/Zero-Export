@@ -741,6 +741,36 @@ class SimulatorDevice {
     };
   }
 
+  /** Contiguous defined blocks per area; crossing between blocks returns
+   *  exception 02 on the real device and the simulator alike. */
+  readBlocks() {
+    const byType = new Map();
+    for (const register of this.profile.registers) {
+      if (register.enabled === false) continue;
+      const list = byType.get(register.registerType) || [];
+      list.push(register);
+      byType.set(register.registerType, list);
+    }
+
+    const blocks = [];
+    for (const [registerType, list] of byType) {
+      list.sort((left, right) => left.address - right.address);
+      let current = null;
+      for (const register of list) {
+        if (current && register.address <= current.address + current.length) {
+          current.length = Math.max(
+            current.length,
+            register.address + register.length - current.address,
+          );
+        } else {
+          current = { registerType, address: register.address, length: register.length };
+          blocks.push(current);
+        }
+      }
+    }
+    return blocks.sort((left, right) => left.address - right.address);
+  }
+
   getStatus() {
     return {
       key: this.key,
@@ -758,6 +788,7 @@ class SimulatorDevice {
       lastError: this.lastError,
       registerCount: this.profile.registers.length,
       servedRegisterCount: this.values.size,
+      readBlocks: this.readBlocks(),
       deratingPercent: this.model.deratingRaw !== undefined
         ? Math.round((this.model.deratingRaw / 10) * 10) / 10
         : undefined,

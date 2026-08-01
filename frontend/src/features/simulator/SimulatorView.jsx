@@ -495,6 +495,24 @@ export function SimulatorView({ devices, profiles, notify, onForwardProfile }) {
                   <KeyValue label="Last request" value={deviceStatus?.lastRequestAt ? new Date(deviceStatus.lastRequestAt).toLocaleTimeString() : "—"} />
                   <KeyValue label="Last tick" value={deviceStatus?.lastTickAt ? new Date(deviceStatus.lastTickAt).toLocaleTimeString() : "—"} />
                 </div>
+
+                {deviceStatus?.readBlocks?.length > 0 && (
+                  <div className="rounded-lg border border-slate-100 bg-slate-50 p-3">
+                    <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+                      Valid FC03 read blocks (gaps return exception 02)
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {deviceStatus.readBlocks.map((block) => (
+                        <span
+                          key={`${block.registerType}-${block.address}`}
+                          className="rounded-md border border-slate-200 bg-white px-2 py-0.5 font-mono text-[11px] text-slate-600"
+                        >
+                          {block.address}–{block.address + block.length - 1} ({block.length})
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
           );
