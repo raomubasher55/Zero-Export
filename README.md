@@ -146,6 +146,11 @@ repository/model, route, and validation boundaries.
 - `POST /api/v1/register-profiles/restore-builtins` re-creates any deleted
   built-in profiles without a restart; the Profiles page shows a **Restore
   built-ins** button whenever a built-in profile is missing.
+- Each profile card has a **Forward** action: it adds every enabled register
+  of that profile to the gateway forwarding map at the meter's own addresses
+  (via the same mapping generator used by the Gateway page). It requires at
+  least one device assigned to the profile; existing mapping keys are kept,
+  so repeated forwards never duplicate entries.
 - `POST /api/v1/gateway/mappings/generate` builds one forwarding mapping per
   enabled profile register using the meter's **same addresses** (same Modbus
   area by default, or a chosen area such as holding registers with the same

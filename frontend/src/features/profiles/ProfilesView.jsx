@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import {
+  ArrowRightLeft,
   CirclePlus,
   Download,
   LoaderCircle,
@@ -27,6 +28,8 @@ export function ProfilesView({
   onImport,
   onExport,
   onRestoreBuiltins,
+  onForward,
+  forwardCounts = new Map(),
 }) {
   const fileInputRef = useRef(null);
   const [importing, setImporting] = useState(false);
@@ -198,6 +201,23 @@ export function ProfilesView({
                   <KeyValue label="Model" value={profile.model || "—"} />
                 </div>
                 <div className="mt-5 flex gap-2">
+                  {onForward && (
+                    <Button
+                      className="flex-1"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => onForward(profile)}
+                      disabled={!forwardCounts.has(String(profile._id))}
+                      title={
+                        forwardCounts.has(String(profile._id))
+                          ? "Add this profile's registers to the gateway forwarding map at the same addresses."
+                          : "Assign this profile to a device before forwarding it."
+                      }
+                    >
+                      <ArrowRightLeft className="h-3.5 w-3.5" />
+                      Forward
+                    </Button>
+                  )}
                   <Button
                     className="flex-1"
                     variant="outline"

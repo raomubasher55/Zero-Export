@@ -158,6 +158,55 @@ function App() {
     }
   };
 
+  const forwardProfileToGateway = async (profile) => {
+    try {
+      const device = data.devices.find(
+        (item) => String(item.registerProfile?._id) === String(profile._id),
+      );
+      if (!device) {
+        data.notify(
+          `Assign “${profile.name}” to a device before forwarding its registers.`,
+          "error",
+        );
+        return;
+      }
+
+      const gateway = await api.getGateway();
+      const current = gateway.data.configuration;
+      const generated = await api.generateGatewayMappings({
+        sourceDeviceId: device._id,
+      });
+      const existingKeys = new Set(
+        (current.mappings || []).map((mapping) => mapping.key),
+      );
+      const fresh = (generated.data.mappings || []).filter(
+        (mapping) => !existingKeys.has(mapping.key),
+      );
+
+      if (fresh.length === 0) {
+        data.notify(
+          `All registers of “${profile.name}” are already in the forwarding map.`,
+          "error",
+        );
+        return;
+      }
+
+      await api.updateGateway({
+        enabled: current.enabled,
+        unitId: current.unitId,
+        tcp: current.tcp,
+        rtu: current.rtu,
+        mappings: [...(current.mappings || []), ...fresh],
+      });
+      data.notify(
+        `${fresh.length} register(s) from “${profile.name}” added to the forwarding map at the same addresses. Review and start it in the Gateway page.`,
+      );
+    } catch (forwardError) {
+      data.notify(getErrorMessage(forwardError), "error");
+      throw forwardError;
+    }
+  };
+
   return (
     <AppShell
       health={data.health}
@@ -206,6 +255,7 @@ function App() {
                 onImportProfiles={importProfiles}
                 onExportProfiles={exportProfiles}
                 onRestoreBuiltins={restoreBuiltinProfiles}
+                onForwardProfile={forwardProfileToGateway}
               />
             }
           />
