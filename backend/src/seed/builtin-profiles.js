@@ -2,6 +2,7 @@
 
 const logger = require('../config/logger');
 const { EM500_PROFILE } = require('./em500.profile');
+const { HUAWEI_SUN2000_PROFILE } = require('./huawei-sun2000.profile');
 const RegisterProfileRepository = require('../repositories/register-profile.repository');
 
 /**
@@ -13,7 +14,7 @@ const RegisterProfileRepository = require('../repositories/register-profile.repo
  * Operator-created profiles and built-in profiles at the current version are
  * never touched, so local edits are preserved between releases.
  */
-const BUILTIN_PROFILES = Object.freeze([EM500_PROFILE]);
+const BUILTIN_PROFILES = Object.freeze([EM500_PROFILE, HUAWEI_SUN2000_PROFILE]);
 
 function profileVersionOf(profile) {
   return profile?.metadata?.profileVersion ?? 0;

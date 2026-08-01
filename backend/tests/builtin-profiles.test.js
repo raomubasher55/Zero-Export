@@ -142,8 +142,8 @@ test('built-in profile seed creates missing profiles and never overwrites existi
 
 test('built-in profile seed skips identifiers that already exist at the current version', async () => {
   const repository = {
-    findByIdentifier: async () => ({
-      identifier: 'em500',
+    findByIdentifier: async (identifier) => ({
+      identifier,
       builtIn: true,
       metadata: { profileVersion: CURRENT_PROFILE_VERSION },
     }),
@@ -156,15 +156,18 @@ test('built-in profile seed skips identifiers that already exist at the current 
   };
 
   const results = await seedBuiltinProfiles(repository);
-  assert.deepEqual(results, [{ identifier: 'em500', action: 'SKIPPED' }]);
+  assert.deepEqual(
+    results.map((result) => result.action),
+    ['SKIPPED', 'SKIPPED'],
+  );
 });
 
 test('built-in profile seed upgrades stale built-in profiles to the shipped version', async () => {
-  let updatedPayload;
+  const updated = [];
   const repository = {
-    findByIdentifier: async () => ({
-      _id: '507f1f77bcf86cd799439099',
-      identifier: 'em500',
+    findByIdentifier: async (identifier) => ({
+      _id: `507f1f77bcf86cd799439099${identifier === 'em500' ? '1' : '2'}`,
+      identifier,
       builtIn: true,
       metadata: { profileVersion: 1 },
     }),
@@ -172,16 +175,22 @@ test('built-in profile seed upgrades stale built-in profiles to the shipped vers
       throw new Error('create must not be called for existing profiles');
     },
     updateById: async (id, payload) => {
-      updatedPayload = payload;
+      updated.push(payload);
       return { _id: id, ...payload };
     },
   };
 
   const results = await seedBuiltinProfiles(repository);
-  assert.deepEqual(results, [{ identifier: 'em500', action: 'UPDATED' }]);
-  assert.equal(updatedPayload.metadata.profileVersion, CURRENT_PROFILE_VERSION);
-  assert.equal(updatedPayload.builtIn, true);
-  const energyEnabled = updatedPayload.registers.filter(
+  // EM500 ships at version 2 (upgrade), Huawei ships at version 1 (current).
+  assert.deepEqual(
+    results.map((result) => result.action),
+    ['UPDATED', 'SKIPPED'],
+  );
+
+  const em500Upgrade = updated.find((profile) => profile.identifier === 'em500');
+  assert.equal(em500Upgrade.metadata.profileVersion, CURRENT_PROFILE_VERSION);
+  assert.equal(em500Upgrade.builtIn, true);
+  const energyEnabled = em500Upgrade.registers.filter(
     (register) => register.group === 'Energy' && register.enabled,
   );
   assert.equal(energyEnabled.length, 0, 'upgrade must disable energy counters');
@@ -189,9 +198,9 @@ test('built-in profile seed upgrades stale built-in profiles to the shipped vers
 
 test('built-in profile seed never touches operator-created profiles', async () => {
   const repository = {
-    findByIdentifier: async () => ({
+    findByIdentifier: async (identifier) => ({
       _id: '507f1f77bcf86cd799439099',
-      identifier: 'em500',
+      identifier,
       builtIn: false,
       registers: [{ key: 'operator_value', name: 'Operator value' }],
     }),
@@ -204,7 +213,10 @@ test('built-in profile seed never touches operator-created profiles', async () =
   };
 
   const results = await seedBuiltinProfiles(repository);
-  assert.deepEqual(results, [{ identifier: 'em500', action: 'SKIPPED' }]);
+  assert.deepEqual(
+    results.map((result) => result.action),
+    ['SKIPPED', 'SKIPPED'],
+  );
 });
 
 test('RegisterProfileService.restoreBuiltIns recreates deleted built-in profiles', async () => {
@@ -221,25 +233,41 @@ test('RegisterProfileService.restoreBuiltIns recreates deleted built-in profiles
   });
 
   const result = await service.restoreBuiltIns();
-  assert.deepEqual(result.restored, ['em500']);
+  assert.deepEqual(result.restored, ['em500', 'huawei-sun2000']);
   assert.deepEqual(result.alreadyPresent, []);
-  assert.equal(result.total, 1);
+  assert.equal(result.total, 2);
   assert.ok(created.every((profile) => profile.builtIn === true));
 });
 
 test('RegisterProfileService.restoreBuiltIns reports profiles that already exist', async () => {
+  const created = [];
   const service = new RegisterProfileService({
     registerProfileRepository: {
-      findByIdentifier: async () => ({ identifier: 'em500' }),
-      create: async () => {
-        throw new Error('create must not be called');
+      findByIdentifier: async (identifier) =>
+        identifier === 'em500'
+          ? {
+              identifier,
+              builtIn: true,
+              metadata: { profileVersion: CURRENT_PROFILE_VERSION },
+            }
+          : null,
+      create: async (payload) => {
+        created.push(payload);
+        return payload;
+      },
+      updateById: async () => {
+        throw new Error('update must not be called');
       },
     },
     deviceRepository: {},
   });
 
   const result = await service.restoreBuiltIns();
-  assert.deepEqual(result.restored, []);
+  assert.deepEqual(result.restored, ['huawei-sun2000']);
   assert.deepEqual(result.alreadyPresent, ['em500']);
-  assert.equal(result.total, 1);
+  assert.equal(result.total, 2);
+  assert.deepEqual(
+    created.map((profile) => profile.identifier),
+    ['huawei-sun2000'],
+  );
 });

@@ -71,10 +71,19 @@ export const api = {
   getSystemUsage: () => request('/system'),
 
   getSimulator: () => request('/simulator'),
-  updateSimulator: (payload) => request('/simulator', { method: 'PUT', body: payload }),
-  startSimulator: () => request('/simulator/start', { method: 'POST' }),
-  stopSimulator: () => request('/simulator/stop', { method: 'POST' }),
-  getSimulatorValues: () => request('/simulator/values'),
+  updateSimulatorDevice: (deviceKey, payload) =>
+    request(`/simulator/devices/${deviceKey}`, { method: 'PUT', body: payload }),
+  startSimulatorDevice: (deviceKey) =>
+    request(`/simulator/devices/${deviceKey}/start`, { method: 'POST' }),
+  stopSimulatorDevice: (deviceKey) =>
+    request(`/simulator/devices/${deviceKey}/stop`, { method: 'POST' }),
+  getSimulatorValues: (deviceKey) =>
+    request(`/simulator/values${toQueryString({ device: deviceKey })}`),
+
+  getZeroExport: () => request('/zero-export'),
+  updateZeroExport: (payload) => request('/zero-export', { method: 'PUT', body: payload }),
+  startZeroExport: () => request('/zero-export/start', { method: 'POST' }),
+  stopZeroExport: () => request('/zero-export/stop', { method: 'POST' }),
 
   getGateway: () => request('/gateway'),
   updateGateway: (payload) => request('/gateway', { method: 'PUT', body: payload }),

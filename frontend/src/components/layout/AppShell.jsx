@@ -7,6 +7,7 @@ import {
   Network,
   Radio,
   RefreshCw,
+  Zap,
 } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -19,7 +20,8 @@ const NAV_ITEMS = [
   { path: "/profiles", label: "Register profiles", icon: FileCog },
   { path: "/gateway", label: "Forwarding gateway", icon: ArrowRightLeft, end: true },
   { path: "/gateway/traffic", label: "Traffic analyzer", icon: Radio },
-  { path: "/simulator", label: "Meter simulator", icon: FlaskConical },
+  { path: "/simulator", label: "Simulators", icon: FlaskConical },
+  { path: "/zero-export", label: "Zero export", icon: Zap },
   { path: "/system", label: "Orange Pi system", icon: Cpu },
 ];
 
@@ -29,7 +31,8 @@ function pageTitle(pathname) {
   if (pathname.startsWith("/profiles")) return "Register profiles";
   if (pathname.startsWith("/gateway/traffic")) return "Inverter request analyzer";
   if (pathname.startsWith("/gateway")) return "Modbus forwarding gateway";
-  if (pathname.startsWith("/simulator")) return "Meter simulator";
+  if (pathname.startsWith("/simulator")) return "Device simulators";
+  if (pathname.startsWith("/zero-export")) return "Zero export controller";
   if (pathname.startsWith("/system")) return "Orange Pi system usage";
   return "Operations center";
 }

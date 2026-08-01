@@ -9,8 +9,9 @@ const { modbusGatewayRuntime } = require('./gateway/modbus-gateway-runtime');
 const { modbusConnectionManager } = require('./modbus/connection-manager');
 const { pollingScheduler } = require('./jobs/polling-scheduler');
 const { gatewayService } = require('./services/gateway.service');
+const { zeroExportService } = require('./services/zero-export.service');
 const { ensureBuiltinProfiles } = require('./seed/builtin-profiles');
-const { meterSimulator } = require('./simulator/meter-simulator');
+const { stopAll } = require('./simulator');
 
 let server;
 let shuttingDown = false;
@@ -35,7 +36,8 @@ async function shutdown(reason, exitCode = 0) {
 
     try {
       await pollingScheduler.stop();
-      await meterSimulator.stop();
+      await zeroExportService.stop();
+      await stopAll();
       await modbusGatewayRuntime.stop();
       await modbusConnectionManager.shutdown();
       await disconnectDatabase();
@@ -67,6 +69,12 @@ async function bootstrap() {
 
   await gatewayService.initialize().catch((error) => {
     logger.error('Unable to initialize the Modbus forwarding gateway', {
+      error: error.stack || error.message,
+    });
+  });
+
+  await zeroExportService.initialize().catch((error) => {
+    logger.error('Unable to initialize the zero-export controller', {
       error: error.stack || error.message,
     });
   });

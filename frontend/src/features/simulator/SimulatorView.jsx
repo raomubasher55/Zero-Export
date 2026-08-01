@@ -19,36 +19,68 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ErrorBanner, EmptyState, KeyValue } from "@/components/common/Feedback";
-import { Field } from "@/components/common/FormControls";
+import { Field, SwitchRow } from "@/components/common/FormControls";
 import { api } from "@/lib/api";
 import { formatValue } from "@/lib/formatters";
 
-const GROUPS = ["Measurements", "Energy"];
+const DEVICE_KEYS = ["em500", "huawei"];
+
+const DEVICE_DEFAULTS = {
+  em500: { label: "EM500 grid meter", port: "15020", unitId: "1" },
+  huawei: {
+    label: "Huawei SUN2000 inverter",
+    port: "15021",
+    unitId: "2",
+    ratingKw: "100",
+    availabilityPct: "80",
+  },
+};
 
 export function SimulatorView({ devices, profiles, notify, onForwardProfile }) {
   const [status, setStatus] = useState(null);
-  const [form, setForm] = useState({
-    host: "0.0.0.0",
-    port: "15020",
-    unitId: "1",
-    updateIntervalMs: "1000",
-  });
-  const [values, setValues] = useState([]);
-  const [working, setWorking] = useState(false);
+  const [forms, setForms] = useState(() =>
+    Object.fromEntries(
+      DEVICE_KEYS.map((key) => [
+        key,
+        {
+          host: "0.0.0.0",
+          port: DEVICE_DEFAULTS[key].port,
+          unitId: DEVICE_DEFAULTS[key].unitId,
+          updateIntervalMs: "1000",
+          ratingKw: "100",
+          availabilityPct: "80",
+        },
+      ]),
+    ),
+  );
+  const [values, setValues] = useState({ em500: [], huawei: [] });
+  const [working, setWorking] = useState("");
   const [error, setError] = useState("");
 
   const load = useCallback(async () => {
     try {
       const response = await api.getSimulator();
       setStatus(response.data);
-      setForm((current) => ({
-        host: response.data.host ?? current.host,
-        port: String(response.data.port ?? current.port),
-        unitId: String(response.data.unitId ?? current.unitId),
-        updateIntervalMs: String(
-          response.data.updateIntervalMs ?? current.updateIntervalMs,
-        ),
-      }));
+      setForms((current) => {
+        const next = { ...current };
+        for (const [key, device] of Object.entries(response.data.devices || {})) {
+          next[key] = {
+            host: device.host ?? next[key]?.host ?? "0.0.0.0",
+            port: String(device.port ?? next[key]?.port ?? 15020),
+            unitId: String(device.unitId ?? next[key]?.unitId ?? 1),
+            updateIntervalMs: String(
+              device.updateIntervalMs ?? next[key]?.updateIntervalMs ?? 1000,
+            ),
+            ratingKw: String(
+              device.options?.ratingKw ?? next[key]?.ratingKw ?? 100,
+            ),
+            availabilityPct: String(
+              device.options?.availabilityPct ?? next[key]?.availabilityPct ?? 80,
+            ),
+          };
+        }
+        return next;
+      });
       setError("");
     } catch (loadError) {
       setError(loadError?.message || "Unable to load the simulator status.");
@@ -62,107 +94,150 @@ export function SimulatorView({ devices, profiles, notify, onForwardProfile }) {
   useEffect(() => {
     const interval = setInterval(async () => {
       try {
-        const response = await api.getSimulatorValues();
-        setValues(response.data || []);
+        const [em500, huawei] = await Promise.all([
+          api.getSimulatorValues("em500"),
+          api.getSimulatorValues("huawei"),
+        ]);
+        setValues({ em500: em500.data || [], huawei: huawei.data || [] });
       } catch {
-        // The simulator may be stopped; the status card shows the state.
+        // The simulator may be stopped; the status cards show the state.
       }
     }, 3000);
     return () => clearInterval(interval);
   }, []);
 
   const em500Profile = useMemo(
-    () =>
-      profiles.find(
-        (profile) =>
-          profile.identifier === "em500" || profile.builtIn === true,
-      ),
+    () => profiles.find((profile) => profile.identifier === "em500"),
     [profiles],
   );
-
-  const simulatorDevice = useMemo(
-    () => devices.find((device) => device.identifier === "em500-simulator"),
+  const huaweiProfile = useMemo(
+    () => profiles.find((profile) => profile.identifier === "huawei-sun2000"),
+    [profiles],
+  );
+  const simulatorDevices = useMemo(
+    () => ({
+      em500: devices.find((device) => device.identifier === "em500-simulator"),
+      huawei: devices.find((device) => device.identifier === "huawei-simulator"),
+    }),
     [devices],
   );
 
-  const run = async (operation, successMessage) => {
-    setWorking(true);
+  const run = async (deviceKey, operation, successMessage) => {
+    setWorking(deviceKey);
     setError("");
     try {
       const response = await operation();
-      setStatus(response.data);
+      const deviceStatus = response.data;
+      setStatus((current) => ({
+        ...current,
+        devices: { ...current?.devices, [deviceKey]: deviceStatus },
+      }));
       notify(successMessage);
     } catch (operationError) {
       setError(operationError?.message || "Simulator operation failed.");
       notify(operationError?.message || "Simulator operation failed.", "error");
     } finally {
-      setWorking(false);
+      setWorking("");
     }
   };
 
-  const save = () =>
+  const save = (deviceKey) => {
+    const form = forms[deviceKey];
+    const payload = {
+      host: form.host.trim(),
+      port: Number(form.port),
+      unitId: Number(form.unitId),
+      updateIntervalMs: Number(form.updateIntervalMs),
+    };
+    if (deviceKey === "huawei") {
+      payload.options = {
+        ratingKw: Number(form.ratingKw),
+        availabilityPct: Number(form.availabilityPct),
+      };
+    }
+    return run(
+      deviceKey,
+      () => api.updateSimulatorDevice(deviceKey, payload),
+      `${DEVICE_DEFAULTS[deviceKey].label} settings saved.`,
+    );
+  };
+
+  const start = (deviceKey) =>
     run(
-      () =>
-        api.updateSimulator({
-          host: form.host.trim(),
-          port: Number(form.port),
-          unitId: Number(form.unitId),
-          updateIntervalMs: Number(form.updateIntervalMs),
-        }),
-      "Simulator settings saved.",
+      deviceKey,
+      () => api.startSimulatorDevice(deviceKey),
+      `${DEVICE_DEFAULTS[deviceKey].label} started.`,
+    );
+  const stop = (deviceKey) =>
+    run(
+      deviceKey,
+      () => api.stopSimulatorDevice(deviceKey),
+      `${DEVICE_DEFAULTS[deviceKey].label} stopped.`,
     );
 
-  const start = () => run(() => api.startSimulator(), "Meter simulator started.");
-  const stop = () => run(() => api.stopSimulator(), "Meter simulator stopped.");
+  const setField = (deviceKey, field, value) =>
+    setForms((current) => ({
+      ...current,
+      [deviceKey]: { ...current[deviceKey], [field]: value },
+    }));
 
-  const addSimulatorDevice = async () => {
-    if (!em500Profile) {
-      notify(
-        "Restore the built-in EM500 profile before creating a simulator device.",
-        "error",
-      );
-      return;
-    }
-    if (simulatorDevice) {
-      notify("A simulator device already exists; open it from the Devices page.");
+  const addSimulatorDevices = async () => {
+    const missing = [];
+    if (!em500Profile) missing.push("EM500 profile (restore built-ins)");
+    if (!huaweiProfile) missing.push("Huawei profile (restore built-ins)");
+    if (missing.length > 0) {
+      notify(`Missing: ${missing.join(", ")}`, "error");
       return;
     }
     try {
-      await api.createDevice({
-        identifier: "em500-simulator",
-        name: "EM500 Simulator",
-        site: "Simulator",
-        unitId: Number(form.unitId),
-        connection: {
-          protocol: "TCP",
-          host: "127.0.0.1",
-          port: Number(form.port),
-        },
-        registerProfileId: em500Profile._id,
-        polling: { enabled: true, intervalMs: 5000, jitterMs: 1000 },
-        reconnect: { timeoutMs: 2000, retries: 1, retryDelayMs: 200 },
-        tags: ["simulator"],
-      });
-      notify("Simulator device created and polling started.");
+      const em500UnitId = Number(forms.em500.unitId);
+      const huaweiUnitId = Number(forms.huawei.unitId);
+      const created = [];
+      if (!simulatorDevices.em500) {
+        await api.createDevice({
+          identifier: "em500-simulator",
+          name: "EM500 Simulator",
+          site: "Simulator",
+          unitId: em500UnitId,
+          connection: { protocol: "TCP", host: "127.0.0.1", port: Number(forms.em500.port) },
+          registerProfileId: em500Profile._id,
+          polling: { enabled: true, intervalMs: 5000, jitterMs: 1000 },
+          reconnect: { timeoutMs: 2000, retries: 1, retryDelayMs: 200 },
+          tags: ["simulator"],
+        });
+        created.push("EM500 meter");
+      }
+      if (!simulatorDevices.huawei) {
+        await api.createDevice({
+          identifier: "huawei-simulator",
+          name: "Huawei SUN2000 Simulator",
+          site: "Simulator",
+          unitId: huaweiUnitId,
+          connection: { protocol: "TCP", host: "127.0.0.1", port: Number(forms.huawei.port) },
+          registerProfileId: huaweiProfile._id,
+          polling: { enabled: true, intervalMs: 5000, jitterMs: 1000 },
+          reconnect: { timeoutMs: 2000, retries: 1, retryDelayMs: 200 },
+          tags: ["simulator"],
+        });
+        created.push("Huawei inverter");
+      }
+      notify(
+        created.length > 0
+          ? `Simulator devices created and polling: ${created.join(", ")}.`
+          : "Simulator devices already exist; open them from the Devices page.",
+      );
     } catch (createError) {
-      notify(createError?.message || "Unable to create the simulator device.", "error");
+      notify(createError?.message || "Unable to create simulator devices.", "error");
     }
   };
 
-  const forward = async () => {
-    if (!em500Profile) {
-      notify(
-        "Restore the built-in EM500 profile before forwarding it.",
-        "error",
-      );
+  const forward = async (profile) => {
+    if (!profile) {
+      notify("Restore the built-in profile before forwarding it.", "error");
       return;
     }
-    await onForwardProfile(em500Profile);
+    await onForwardProfile(profile);
   };
-
-  const running = status?.state === "RUNNING";
-  const valuesByGroup = (group) =>
-    values.filter((value) => value.group === group);
 
   return (
     <div className="space-y-6">
@@ -172,211 +247,225 @@ export function SimulatorView({ devices, profiles, notify, onForwardProfile }) {
             Test without a meter
           </p>
           <h2 className="mt-1 text-2xl font-bold tracking-tight sm:text-3xl">
-            EM500 meter simulator
+            Device simulators
           </h2>
           <p className="mt-2 max-w-3xl text-sm text-slate-500">
-            A process-local Modbus TCP slave that serves the Eastron EM500
-            register map with live simulated values — same addresses, same raw
-            format as the physical meter. Poll it, forward it, or analyze its
-            traffic exactly like a real device.
+            Process-local Modbus TCP slaves for an EM500 grid meter and a
+            Huawei SUN2000 inverter. Set each device's own unit ID and port,
+            then poll, forward, or control them exactly like real hardware.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button variant="outline" onClick={addSimulatorDevice} disabled={working}>
-            <CirclePlus className="h-4 w-4" /> Add simulator device
+          <Button variant="outline" onClick={addSimulatorDevices} disabled={Boolean(working)}>
+            <CirclePlus className="h-4 w-4" /> Add simulator devices
           </Button>
-          <Button
-            variant="outline"
-            onClick={forward}
-            disabled={working || !simulatorDevice}
-            title={
-              simulatorDevice
-                ? "Add the simulated meter's registers to the forwarding gateway."
-                : "Create the simulator device first."
-            }
-          >
-            <ArrowRightLeft className="h-4 w-4" /> Forward EM500 profile
+          <Button variant="outline" onClick={load} disabled={Boolean(working)}>
+            <Save className="h-4 w-4" /> Reload status
           </Button>
-          <Button variant="outline" onClick={save} disabled={working}>
-            <Save className="h-4 w-4" /> Save
-          </Button>
-          {running ? (
-            <Button variant="destructive" onClick={stop} disabled={working}>
-              {working ? (
-                <LoaderCircle className="h-4 w-4 animate-spin" />
-              ) : (
-                <Square className="h-4 w-4" />
-              )}
-              Stop
-            </Button>
-          ) : (
-            <Button onClick={start} disabled={working}>
-              {working ? (
-                <LoaderCircle className="h-4 w-4 animate-spin" />
-              ) : (
-                <Play className="h-4 w-4" />
-              )}
-              Start
-            </Button>
-          )}
         </div>
       </section>
 
       <ErrorBanner message={error} />
 
       <div className="grid gap-5 xl:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Simulator status</CardTitle>
-            <CardDescription>
-              The slave endpoint a test device should connect to.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3 text-sm">
-            <div className="flex flex-wrap items-center gap-3">
-              <Badge className={running ? "bg-emerald-600 text-white" : "bg-slate-500 text-white"}>
-                {status?.state || "STOPPED"}
-              </Badge>
-              <span className="font-mono">
-                {status?.host || "0.0.0.0"}:{status?.port ?? 15020}
-              </span>
-              <span>·</span>
-              <span>Unit {status?.unitId ?? 1}</span>
-              <span>·</span>
-              <span>{status?.deviceType || "EM500"}</span>
-            </div>
-            <KeyValue label="Registers served" value={status?.servedRegisterCount ?? 0} />
-            <KeyValue label="Update interval" value={`${status?.updateIntervalMs ?? 1000} ms`} />
-            <KeyValue label="Ticks" value={status?.tickCount ?? 0} />
-            <KeyValue label="Last request" value={status?.lastRequestAt ? new Date(status.lastRequestAt).toLocaleTimeString() : "—"} />
-            <KeyValue label="Last tick" value={status?.lastTickAt ? new Date(status.lastTickAt).toLocaleTimeString() : "—"} />
-          </CardContent>
-        </Card>
+        {DEVICE_KEYS.map((key) => {
+          const deviceStatus = status?.devices?.[key];
+          const running = deviceStatus?.state === "RUNNING";
+          const busy = working === key;
+          const form = forms[key];
+          const defaults = DEVICE_DEFAULTS[key];
+          const deviceRef = simulatorDevices[key];
+          return (
+            <Card key={key}>
+              <CardHeader>
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <CardTitle className="flex items-center gap-2">
+                      <FlaskConical className="h-4 w-4" /> {defaults.label}
+                    </CardTitle>
+                    <CardDescription>
+                      {key === "huawei"
+                        ? "Holding registers (FC03) plus writable derating (FC06/FC16)."
+                        : "Input registers (FC04) with the EM500 map."}
+                    </CardDescription>
+                  </div>
+                  <Badge className={running ? "bg-emerald-600 text-white" : "bg-slate-500 text-white"}>
+                    {deviceStatus?.state || "STOPPED"}
+                  </Badge>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex flex-wrap gap-3 text-sm">
+                  <span className="font-mono">
+                    {deviceStatus?.host || form.host}:{deviceStatus?.port ?? form.port}
+                  </span>
+                  <span>·</span>
+                  <span>Unit {deviceStatus?.unitId ?? form.unitId}</span>
+                  {key === "huawei" && (
+                    <>
+                      <span>·</span>
+                      <span>
+                        {deviceStatus?.deratingPercent ?? 100}% derating
+                      </span>
+                    </>
+                  )}
+                  {deviceStatus?.lastError?.message && (
+                    <span className="w-full text-rose-700">
+                      {deviceStatus.lastError.message}
+                    </span>
+                  )}
+                </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Endpoint settings</CardTitle>
-            <CardDescription>
-              Changes restart the simulator when it is running.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-4 sm:grid-cols-2">
-            <Field label="Listen address">
-              <Input
-                value={form.host}
-                onChange={(event) =>
-                  setForm((current) => ({ ...current, host: event.target.value }))
-                }
-              />
-            </Field>
-            <Field label="TCP port">
-              <Input
-                type="number"
-                min="1"
-                max="65535"
-                value={form.port}
-                onChange={(event) =>
-                  setForm((current) => ({ ...current, port: event.target.value }))
-                }
-              />
-            </Field>
-            <Field label="Unit ID" hint="The test device must request this unit ID.">
-              <Input
-                type="number"
-                min="1"
-                max="247"
-                value={form.unitId}
-                onChange={(event) =>
-                  setForm((current) => ({ ...current, unitId: event.target.value }))
-                }
-              />
-            </Field>
-            <Field label="Update interval (ms)" hint="How often simulated values change.">
-              <Input
-                type="number"
-                min="250"
-                max="60000"
-                value={form.updateIntervalMs}
-                onChange={(event) =>
-                  setForm((current) => ({
-                    ...current,
-                    updateIntervalMs: event.target.value,
-                  }))
-                }
-              />
-            </Field>
-          </CardContent>
-        </Card>
+                <div className="grid gap-4 sm:grid-cols-3">
+                  <Field label="Unit ID" hint="Slave ID this device answers on.">
+                    <Input
+                      type="number"
+                      min="1"
+                      max="247"
+                      value={form.unitId}
+                      onChange={(event) => setField(key, "unitId", event.target.value)}
+                    />
+                  </Field>
+                  <Field label="TCP port">
+                    <Input
+                      type="number"
+                      min="1"
+                      max="65535"
+                      value={form.port}
+                      onChange={(event) => setField(key, "port", event.target.value)}
+                    />
+                  </Field>
+                  <Field label="Update (ms)">
+                    <Input
+                      type="number"
+                      min="250"
+                      max="60000"
+                      value={form.updateIntervalMs}
+                      onChange={(event) => setField(key, "updateIntervalMs", event.target.value)}
+                    />
+                  </Field>
+                  {key === "huawei" && (
+                    <>
+                      <Field label="Solar rating (kW)">
+                        <Input
+                          type="number"
+                          min="0.1"
+                          value={form.ratingKw}
+                          onChange={(event) => setField(key, "ratingKw", event.target.value)}
+                        />
+                      </Field>
+                      <Field label="Solar availability (%)" hint="Simulated irradiance.">
+                        <Input
+                          type="number"
+                          min="0"
+                          max="100"
+                          value={form.availabilityPct}
+                          onChange={(event) => setField(key, "availabilityPct", event.target.value)}
+                        />
+                      </Field>
+                    </>
+                  )}
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  <Button variant="outline" size="sm" onClick={() => save(key)} disabled={busy}>
+                    <Save className="h-4 w-4" /> Save
+                  </Button>
+                  {running ? (
+                    <Button variant="destructive" size="sm" onClick={() => stop(key)} disabled={busy}>
+                      {busy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Square className="h-4 w-4" />}
+                      Stop
+                    </Button>
+                  ) : (
+                    <Button size="sm" onClick={() => start(key)} disabled={busy}>
+                      {busy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+                      Start
+                    </Button>
+                  )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => forward(key === "em500" ? em500Profile : huaweiProfile)}
+                    disabled={!deviceRef || Boolean(working)}
+                    title={
+                      deviceRef
+                        ? "Add this profile to the forwarding gateway at the same addresses."
+                        : "Create the simulator device first."
+                    }
+                  >
+                    <ArrowRightLeft className="h-4 w-4" /> Forward profile
+                  </Button>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 text-xs text-slate-500 sm:grid-cols-4">
+                  <KeyValue label="Registers" value={deviceStatus?.servedRegisterCount ?? 0} />
+                  <KeyValue label="Ticks" value={deviceStatus?.tickCount ?? 0} />
+                  <KeyValue label="Last request" value={deviceStatus?.lastRequestAt ? new Date(deviceStatus.lastRequestAt).toLocaleTimeString() : "—"} />
+                  <KeyValue label="Last tick" value={deviceStatus?.lastTickAt ? new Date(deviceStatus.lastTickAt).toLocaleTimeString() : "—"} />
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <FlaskConical className="h-4 w-4" /> Simulated values
-            <Badge variant="outline">{values.length}</Badge>
-          </CardTitle>
-          <CardDescription>
-            Live snapshot of what the simulator serves; refreshes every three
-            seconds.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          {values.length === 0 ? (
-            <EmptyState
-              title="No values yet"
-              description="Start the simulator to generate values."
-            />
-          ) : (
-            GROUPS.map((group) => {
-              const groupValues = valuesByGroup(group);
-              if (groupValues.length === 0) return null;
-              return (
-                <div key={group}>
-                  <h3 className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">
-                    {group}
-                  </h3>
-                  <div className="overflow-x-auto rounded-xl border border-slate-200">
-                    <table className="w-full text-left text-sm">
-                      <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
-                        <tr>
-                          <th className="px-3 py-2">Register</th>
-                          <th className="px-3 py-2">Address</th>
-                          <th className="px-3 py-2 text-right">Value</th>
-                          <th className="px-3 py-2">Raw words</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {groupValues.map((value) => (
-                          <tr key={value.registerKey}>
-                            <td className="px-3 py-1.5">
-                              <span className="font-medium">{value.registerName}</span>
-                              <span className="ml-2 font-mono text-xs text-slate-400">
-                                {value.registerKey}
-                              </span>
-                            </td>
-                            <td className="px-3 py-1.5 font-mono text-xs text-slate-500">
-                              0x{value.address.toString(16).toUpperCase().padStart(4, "0")}
-                            </td>
-                            <td className="px-3 py-1.5 text-right font-mono">
-                              {formatValue(value.value)}{" "}
-                              <span className="text-xs text-slate-400">
-                                {value.unit || ""}
-                              </span>
-                            </td>
-                            <td className="px-3 py-1.5 font-mono text-xs text-slate-500">
-                              {value.rawValues?.join(", ")}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              );
-            })
-          )}
-        </CardContent>
-      </Card>
+      {DEVICE_KEYS.map((key) => (
+        <Card key={`values-${key}`}>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <FlaskConical className="h-4 w-4" /> {DEVICE_DEFAULTS[key].label} values
+              <Badge variant="outline">{values[key].length}</Badge>
+            </CardTitle>
+            <CardDescription>
+              Live snapshot served by the {DEVICE_DEFAULTS[key].label} simulator;
+              refreshes every three seconds.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {values[key].length === 0 ? (
+              <EmptyState
+                title="No values yet"
+                description="Start this simulator device to generate values."
+              />
+            ) : (
+              <div className="overflow-x-auto rounded-xl border border-slate-200">
+                <table className="w-full text-left text-sm">
+                  <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+                    <tr>
+                      <th className="px-3 py-2">Register</th>
+                      <th className="px-3 py-2">Address</th>
+                      <th className="px-3 py-2 text-right">Value</th>
+                      <th className="px-3 py-2">Raw words</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {values[key].map((value) => (
+                      <tr key={value.registerKey}>
+                        <td className="px-3 py-1.5">
+                          <span className="font-medium">{value.registerName}</span>
+                          <span className="ml-2 font-mono text-xs text-slate-400">
+                            {value.registerKey}
+                          </span>
+                        </td>
+                        <td className="px-3 py-1.5 font-mono text-xs text-slate-500">
+                          0x{Number(value.address).toString(16).toUpperCase().padStart(4, "0")}
+                        </td>
+                        <td className="px-3 py-1.5 text-right font-mono">
+                          {formatValue(value.value)}{" "}
+                          <span className="text-xs text-slate-400">{value.unit || ""}</span>
+                        </td>
+                        <td className="px-3 py-1.5 font-mono text-xs text-slate-500">
+                          {value.rawValues?.join(", ")}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      ))}
     </div>
   );
 }

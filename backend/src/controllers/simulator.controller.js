@@ -1,42 +1,53 @@
 'use strict';
 
-const { meterSimulator } = require('../simulator/meter-simulator');
+const {
+  getDevice,
+  getStatus,
+  getValues,
+} = require('../simulator');
 const { sendSuccess } = require('../utils/api-response');
 
 class SimulatorController {
-  constructor(runtime = meterSimulator) {
+  constructor(runtime = { getStatus, getValues, getDevice }) {
     this.runtime = runtime;
     this.get = this.get.bind(this);
     this.getValues = this.getValues.bind(this);
-    this.update = this.update.bind(this);
-    this.start = this.start.bind(this);
-    this.stop = this.stop.bind(this);
+    this.updateDevice = this.updateDevice.bind(this);
+    this.startDevice = this.startDevice.bind(this);
+    this.stopDevice = this.stopDevice.bind(this);
   }
 
   async get(_req, res) {
     return sendSuccess(res, { data: this.runtime.getStatus() });
   }
 
-  async getValues(_req, res) {
-    return sendSuccess(res, { data: this.runtime.getValues() });
+  async getValues(req, res) {
+    const deviceKey = req.validated.query.device;
+    return sendSuccess(res, {
+      data: this.runtime.getValues(deviceKey),
+      meta: { device: deviceKey },
+    });
   }
 
-  async update(req, res) {
-    const wasRunning = this.runtime.getStatus().state === 'RUNNING';
-    await this.runtime.stop();
-    this.runtime.configure(req.validated.body);
+  async updateDevice(req, res) {
+    const device = this.runtime.getDevice(req.validated.params.deviceKey);
+    const wasRunning = device.getStatus().state === 'RUNNING';
+    await device.stop();
+    device.configure(req.validated.body);
     if (wasRunning) {
-      await this.runtime.start();
+      await device.start();
     }
-    return sendSuccess(res, { data: this.runtime.getStatus() });
+    return sendSuccess(res, { data: device.getStatus() });
   }
 
-  async start(_req, res) {
-    return sendSuccess(res, { data: await this.runtime.start() });
+  async startDevice(req, res) {
+    const device = this.runtime.getDevice(req.validated.params.deviceKey);
+    return sendSuccess(res, { data: await device.start() });
   }
 
-  async stop(_req, res) {
-    return sendSuccess(res, { data: await this.runtime.stop() });
+  async stopDevice(req, res) {
+    const device = this.runtime.getDevice(req.validated.params.deviceKey);
+    return sendSuccess(res, { data: await device.stop() });
   }
 }
 

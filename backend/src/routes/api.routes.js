@@ -11,6 +11,7 @@ const pollingRoutes = require('./polling.routes');
 const registerProfileRoutes = require('./register-profile.routes');
 const simulatorRoutes = require('./simulator.routes');
 const systemRoutes = require('./system.routes');
+const zeroExportRoutes = require('./zero-export.routes');
 
 const router = express.Router();
 
@@ -42,6 +43,7 @@ router.get('/', (_req, res) => {
         gatewayTraffic: '/api/v1/gateway/traffic',
         simulator: '/api/v1/simulator',
         simulatorValues: '/api/v1/simulator/values',
+        zeroExport: '/api/v1/zero-export',
         pollingStatus: '/api/v1/polling/status',
         system: '/api/v1/system',
       },
@@ -58,5 +60,6 @@ router.use('/polling', pollingRoutes);
 router.use('/register-profiles', registerProfileRoutes);
 router.use('/simulator', simulatorRoutes);
 router.use('/system', systemRoutes);
+router.use('/zero-export', zeroExportRoutes);
 
 module.exports = router;

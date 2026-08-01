@@ -186,6 +186,35 @@ repository/model, route, and validation boundaries.
   simulated meter flows through the exact poll → forward → downstream path as
   a real meter.
 
+### Step 10 — Huawei inverter profile, dual-device simulator, and zero-export control
+
+- A built-in **Huawei SUN2000** register profile ships with the backend
+  (`backend/src/seed/huawei-sun2000.profile.js`): line/phase voltages, phase
+  currents, active power, grid frequency, daily/total yield (FC03 holding
+  registers per the Huawei Modbus Interface Definitions V3.0), plus writable
+  derating registers `40125` (0–1000, 0.1% steps) and `40126` (W).
+- The simulator now runs **two devices side by side**, each with its own TCP
+  port and a **configurable slave unit ID**: an EM500 grid meter
+  (`0.0.0.0:15020`, unit 1) and a Huawei SUN2000 inverter
+  (`0.0.0.0:15021`, unit 2). The inverter simulator models solar rating and
+  availability, applies FC06/FC16 derating writes to its output power, and
+  exposes the derating read-back on 40125.
+- **Zero-export controller** (`/api/v1/zero-export`): every cycle it reads the
+  grid power from the meter's latest polled value (positive = import) and
+  steps the inverter derating register toward the target grid power — import
+  above target raises solar output, export lowers it. Deadband, step size,
+  min/max derating, interval, and a failsafe derating (written after repeated
+  stale meter readings) are configurable and persisted in MongoDB.
+- **Simulation mode** replaces the meter reading with
+  `gridPower = plannedLoad − inverterOutput`, so the complete scenario
+  (100 kW load, inverter at 50% → grid supplies the rest) can be exercised
+  end-to-end with the simulators: meter on unit 1, inverter on unit 2, and
+  the controller closing the loop.
+- New `/simulator` page manages both simulated devices (unit IDs, ports,
+  solar rating/availability, live values) and can create simulator devices
+  and forward either profile; the `/zero-export` page configures and runs the
+  controller and shows its recent control actions.
+
 ## Prerequisites
 
 - Node.js **20.11+** (Node 22 LTS recommended)
