@@ -22,11 +22,10 @@ const zeroExportConfigurationSchema = new mongoose.Schema(
     meterDeviceId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Device',
-      required: true,
+      default: null,
     },
     meterRegisterKey: {
       type: String,
-      required: true,
       trim: true,
       maxlength: 64,
       default: 'eqv_active_power',
@@ -34,7 +33,7 @@ const zeroExportConfigurationSchema = new mongoose.Schema(
     inverterDeviceId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Device',
-      required: true,
+      default: null,
     },
     inverterRegisterKey: {
       type: String,

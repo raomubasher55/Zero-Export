@@ -120,6 +120,23 @@ class ZeroExportService {
 
   async startControl() {
     const configuration = await this.configurationRepository.getOrDefault();
+    if (!configuration.meterDeviceId || !configuration.inverterDeviceId) {
+      throw validationError(
+        'Select the grid meter and inverter devices and save before starting.',
+        [
+          {
+            field: 'meterDeviceId',
+            message: 'Grid meter device is not configured.',
+            code: 'not_configured',
+          },
+          {
+            field: 'inverterDeviceId',
+            message: 'Inverter device is not configured.',
+            code: 'not_configured',
+          },
+        ],
+      );
+    }
     const saved = await this.configurationRepository.save({ ...configuration, enabled: true });
     this.configuration = saved;
     this.start();

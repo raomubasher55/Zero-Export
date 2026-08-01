@@ -110,7 +110,8 @@ test('Huawei simulator serves holding registers and accepts derating writes', as
   instance.tick();
   const cappedPowerWords = vector.getMultipleHoldingRegisters(32080, 2, 2);
   const cappedPower = decodeRegister(HUAWEI_BY_KEY.get('active_power'), cappedPowerWords);
-  assert.ok(cappedPower.value <= 30.5, `fixed derating caps output, got ${cappedPower.value} kW`);
+  // The simulator applies ±3% output jitter after the 30 kW cap.
+  assert.ok(cappedPower.value <= 31, `fixed derating caps output, got ${cappedPower.value} kW`);
 
   assert.throws(
     () => vector.setRegister(32080, 1, 2),

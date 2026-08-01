@@ -160,7 +160,10 @@ export function ZeroExportView({ devices, profiles, notify }) {
   const save = () =>
     run(() => api.updateZeroExport(payload()), "Zero-export controller saved.");
   const start = () =>
-    run(() => api.startZeroExport(), "Zero-export controller started.");
+    run(
+      () => api.updateZeroExport({ ...payload(), enabled: true }),
+      "Zero-export controller started.",
+    );
   const stop = () =>
     run(() => api.stopZeroExport(), "Zero-export controller stopped.");
 

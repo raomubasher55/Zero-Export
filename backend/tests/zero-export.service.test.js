@@ -232,6 +232,53 @@ test('zero-export hydrate validates devices and derives the write address', asyn
   );
 });
 
+test('zero-export startControl requires a saved meter and inverter configuration', async () => {
+  const service = new ZeroExportService({
+    configurationRepository: {
+      getOrDefault: async () => configuration({ meterDeviceId: null, inverterDeviceId: null }),
+      save: async () => {
+        throw new Error('save must not be reached without configured devices');
+      },
+      setEnabled: async () => configuration(),
+    },
+    deviceRepository: {},
+    logger: { info: () => undefined, warn: () => undefined, error: () => undefined },
+  });
+
+  await assert.rejects(
+    service.startControl(),
+    (error) =>
+      error.statusCode === 422 &&
+      error.details.some((detail) => detail.code === 'not_configured'),
+  );
+});
+
+test('zero-export startControl persists and starts with configured devices', async () => {
+  let savedPayload;
+  let started = false;
+  const service = new ZeroExportService({
+    configurationRepository: {
+      getOrDefault: async () => configuration(),
+      save: async (value) => {
+        savedPayload = value;
+        return value;
+      },
+      setEnabled: async () => configuration(),
+    },
+    deviceRepository: {},
+    logger: { info: () => undefined, warn: () => undefined, error: () => undefined },
+  });
+  service.start = () => {
+    started = true;
+    return service.getStatus();
+  };
+
+  const result = await service.startControl();
+  assert.equal(started, true);
+  assert.equal(savedPayload.enabled, true);
+  assert.equal(result.configuration.meterDeviceId, METER_ID);
+});
+
 test('zero-export configuration schema validates and cross-checks derating limits', () => {
   const parsed = zeroExportConfigurationSchema.parse(configuration());
   assert.equal(parsed.targetGridKw, 0);
