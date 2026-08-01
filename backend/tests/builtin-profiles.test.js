@@ -12,6 +12,7 @@ const {
 const RegisterProfileService = require('../src/services/register-profile.service');
 
 const MEASUREMENT_SCALES = new Set([0.01, 0.0001, 0.001]);
+const CURRENT_PROFILE_VERSION = EM500_PROFILE.metadata.profileVersion;
 
 test('built-in EM500 profile is valid and complete', () => {
   const parsed = createRegisterProfileBodySchema.parse(EM500_PROFILE);
@@ -33,12 +34,38 @@ test('built-in EM500 profile is valid and complete', () => {
   for (const register of parsed.registers) {
     assert.equal(register.registerType, 'INPUT_REGISTER', `${register.key} must be an input register`);
     assert.equal(register.writable, false, `${register.key} must be read-only`);
-    assert.equal(register.enabled, true, `${register.key} must be enabled`);
     assert.equal(register.bitIndex, 0);
     assert.equal(register.offset, 0);
     assert.equal(register.length, register.dataType === REGISTER_DATA_TYPES.UINT64 ? 4 : 2);
     assert.ok(register.address + register.length <= 65536);
   }
+});
+
+test('EM500 profile polls only the real-time area by default (energy counters disabled)', () => {
+  const measurements = EM500_PROFILE.registers.filter(
+    (register) => register.group === 'Measurements',
+  );
+  const energy = EM500_PROFILE.registers.filter(
+    (register) => register.group === 'Energy',
+  );
+
+  assert.equal(measurements.length, 33);
+  assert.equal(energy.length, 35);
+  assert.ok(
+    measurements.every((register) => register.enabled === true),
+    'all real-time registers must be enabled',
+  );
+  assert.ok(
+    energy.every((register) => register.enabled === false),
+    'energy counters must ship disabled so polls stay within the real-time area',
+  );
+
+  const maxEnabled = Math.max(
+    ...EM500_PROFILE.registers
+      .filter((register) => register.enabled)
+      .map((register) => register.address + register.length),
+  );
+  assert.ok(maxEnabled <= 0x0048 + 2, 'enabled registers must stay in the 0x0000-0x0048 real-time area');
 });
 
 test('EM500 measurement registers use 2-word signed/unsigned longs with manual scaling', () => {
@@ -81,6 +108,7 @@ test('EM500 energy registers are 4-word UINT64 counters scaled by 0.01', () => {
     assert.equal(register.dataType, REGISTER_DATA_TYPES.UINT64);
     assert.equal(register.length, 4);
     assert.equal(register.scaleFactor, 0.01);
+    assert.equal(register.enabled, false, 'energy counters must be disabled by default');
   }
 
   const byKey = new Map(energy.map((register) => [register.key, register]));
@@ -112,11 +140,66 @@ test('built-in profile seed creates missing profiles and never overwrites existi
   );
 });
 
-test('built-in profile seed skips identifiers that already exist', async () => {
+test('built-in profile seed skips identifiers that already exist at the current version', async () => {
   const repository = {
-    findByIdentifier: async () => ({ identifier: 'em500' }),
+    findByIdentifier: async () => ({
+      identifier: 'em500',
+      builtIn: true,
+      metadata: { profileVersion: CURRENT_PROFILE_VERSION },
+    }),
     create: async () => {
       throw new Error('create must not be called for existing profiles');
+    },
+    updateById: async () => {
+      throw new Error('update must not be called for current profiles');
+    },
+  };
+
+  const results = await seedBuiltinProfiles(repository);
+  assert.deepEqual(results, [{ identifier: 'em500', action: 'SKIPPED' }]);
+});
+
+test('built-in profile seed upgrades stale built-in profiles to the shipped version', async () => {
+  let updatedPayload;
+  const repository = {
+    findByIdentifier: async () => ({
+      _id: '507f1f77bcf86cd799439099',
+      identifier: 'em500',
+      builtIn: true,
+      metadata: { profileVersion: 1 },
+    }),
+    create: async () => {
+      throw new Error('create must not be called for existing profiles');
+    },
+    updateById: async (id, payload) => {
+      updatedPayload = payload;
+      return { _id: id, ...payload };
+    },
+  };
+
+  const results = await seedBuiltinProfiles(repository);
+  assert.deepEqual(results, [{ identifier: 'em500', action: 'UPDATED' }]);
+  assert.equal(updatedPayload.metadata.profileVersion, CURRENT_PROFILE_VERSION);
+  assert.equal(updatedPayload.builtIn, true);
+  const energyEnabled = updatedPayload.registers.filter(
+    (register) => register.group === 'Energy' && register.enabled,
+  );
+  assert.equal(energyEnabled.length, 0, 'upgrade must disable energy counters');
+});
+
+test('built-in profile seed never touches operator-created profiles', async () => {
+  const repository = {
+    findByIdentifier: async () => ({
+      _id: '507f1f77bcf86cd799439099',
+      identifier: 'em500',
+      builtIn: false,
+      registers: [{ key: 'operator_value', name: 'Operator value' }],
+    }),
+    create: async () => {
+      throw new Error('create must not be called');
+    },
+    updateById: async () => {
+      throw new Error('operator-created profiles must never be replaced');
     },
   };
 

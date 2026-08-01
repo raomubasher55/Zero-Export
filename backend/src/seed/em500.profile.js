@@ -121,12 +121,21 @@ const EM500_PROFILE = Object.freeze({
   identifier: 'em500',
   name: 'Eastron EM500 energy meter',
   description:
-    'Built-in Eastron EM500 register map: instantaneous phase measurements (2-word) and energy counters (4-word 64-bit), input registers, scaling per the EM500 register data manual.',
+    'Built-in Eastron EM500 register map: instantaneous phase measurements (2-word) and energy counters (4-word 64-bit), input registers, scaling per the EM500 register data manual. Energy counters ship disabled because many EM500 units reject reads above the real-time area; enable them per site once the meter confirms those addresses.',
   manufacturer: 'Eastron',
   model: 'EM500',
-  registers: Object.freeze(registers),
+  registers: Object.freeze(
+    registers.map((register) =>
+      register.group === ENERGY ? { ...register, enabled: false } : register,
+    ),
+  ),
   isActive: true,
   tags: Object.freeze(['em500', 'meter', 'built-in']),
+  metadata: Object.freeze({
+    profileVersion: 2,
+    notes:
+      'Version 2: real-time parameters only (addresses 0x0002-0x0048); energy counters present but disabled until verified on site.',
+  }),
 });
 
 module.exports = {

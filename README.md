@@ -131,7 +131,13 @@ repository/model, route, and validation boundaries.
   measurements (2-word `UINT32`/`INT32`, input registers) and 35 energy
   counters (4-word 64-bit values), all with the manual's scaling
   (V/100, A/10000, W/100, var/100, VA/100, Hz/1000, PF/10000, %/100,
-  kWh/kvarh/kVAh per 100).
+  kWh/kvarh/kVAh per 100). **Energy counters ship disabled**: polls read only
+  the real-time area (addresses `0x0002`–`0x0048`) because many EM500 units
+  reject reads above it. Enable the counters per site once the meter confirms
+  those addresses respond.
+- Built-in profiles are versioned (`metadata.profileVersion`); a stale
+  built-in profile is upgraded to the shipped definition at startup, while
+  operator-created profiles and current-version built-ins are never touched.
 - New **`INT64`/`UINT64`** register data types decode and encode 64-bit
   counters across four Modbus words (big-endian by default, byte/word order
   configurable) for the EM500's 4-word energy registers.
