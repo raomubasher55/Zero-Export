@@ -407,8 +407,13 @@ class SimulatorDevice {
       if (!inverter || inverter.getStatus().state !== 'RUNNING') {
         return 0;
       }
-      // Read the inverter's deterministic model output (no jitter) so the
-      // meter and inverter agree on the same tick.
+      // Use the inverter's latest published output (the same value the
+      // inverter card and polls show), so grid + inverter = load exactly.
+      const value = inverter.values.get('active_power');
+      if (value) {
+        return Number(value.value);
+      }
+      // Fallback: deterministic model output before the first published tick.
       const model = inverter.model;
       if (!model || model.deratingRaw === undefined) {
         return 0;
