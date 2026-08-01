@@ -13,6 +13,7 @@ class RegisterProfileController {
     this.exportAll = this.exportAll.bind(this);
     this.exportById = this.exportById.bind(this);
     this.importFile = this.importFile.bind(this);
+    this.restoreBuiltIns = this.restoreBuiltIns.bind(this);
     this.create = this.create.bind(this);
     this.update = this.update.bind(this);
     this.delete = this.delete.bind(this);
@@ -46,6 +47,11 @@ class RegisterProfileController {
 
   async importFile(req, res) {
     const result = await this.registerProfileService.importFile(req.validated.body);
+    return sendSuccess(res, { data: result });
+  }
+
+  async restoreBuiltIns(_req, res) {
+    const result = await this.registerProfileService.restoreBuiltIns();
     return sendSuccess(res, { data: result });
   }
 

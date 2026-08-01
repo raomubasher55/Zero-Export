@@ -7,6 +7,7 @@ export function ProfilesPage({
   onDeleteProfile,
   onImportProfiles,
   onExportProfiles,
+  onRestoreBuiltins,
 }) {
   return (
     <ProfilesView
@@ -16,6 +17,7 @@ export function ProfilesPage({
       onDelete={onDeleteProfile}
       onImport={onImportProfiles}
       onExport={onExportProfiles}
+      onRestoreBuiltins={onRestoreBuiltins}
     />
   );
 }

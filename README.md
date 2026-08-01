@@ -137,6 +137,9 @@ repository/model, route, and validation boundaries.
   configurable) for the EM500's 4-word energy registers.
 - Built-in profiles are flagged `builtIn: true` in the API and UI; the flag is
   server-managed and excluded from portable import/export files.
+- `POST /api/v1/register-profiles/restore-builtins` re-creates any deleted
+  built-in profiles without a restart; the Profiles page shows a **Restore
+  built-ins** button whenever a built-in profile is missing.
 - `POST /api/v1/gateway/mappings/generate` builds one forwarding mapping per
   enabled profile register using the meter's **same addresses** (same Modbus
   area by default, or a chosen area such as holding registers with the same

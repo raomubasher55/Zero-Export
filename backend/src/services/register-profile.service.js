@@ -4,6 +4,10 @@ const HTTP_STATUS = require('../constants/http-status');
 const ERROR_CODES = require('../constants/error-codes');
 const DeviceRepository = require('../repositories/device.repository');
 const RegisterProfileRepository = require('../repositories/register-profile.repository');
+const {
+  BUILTIN_PROFILES,
+  seedBuiltinProfiles,
+} = require('../seed/builtin-profiles');
 const AppError = require('../utils/app-error');
 const { buildPaginationMeta } = require('../utils/pagination');
 
@@ -151,6 +155,24 @@ class RegisterProfileService {
 
   async create(input) {
     return this.registerProfileRepository.create(input);
+  }
+
+  /**
+   * Re-create any built-in profiles (e.g. Eastron EM500) whose identifier was
+   * deleted. Profiles that still exist are reported as already present and
+   * are never overwritten.
+   */
+  async restoreBuiltIns() {
+    const results = await seedBuiltinProfiles(this.registerProfileRepository);
+    return {
+      total: BUILTIN_PROFILES.length,
+      restored: results
+        .filter((result) => result.action === 'CREATED')
+        .map((result) => result.identifier),
+      alreadyPresent: results
+        .filter((result) => result.action === 'SKIPPED')
+        .map((result) => result.identifier),
+    };
   }
 
   async update(registerProfileId, input) {

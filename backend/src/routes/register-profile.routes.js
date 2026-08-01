@@ -21,6 +21,7 @@ router.post(
   validateRequest({ body: importRegisterProfilesBodySchema }),
   asyncHandler(registerProfileController.importFile),
 );
+router.post('/restore-builtins', asyncHandler(registerProfileController.restoreBuiltIns));
 
 router
   .route('/')

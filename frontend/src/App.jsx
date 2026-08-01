@@ -141,6 +141,23 @@ function App() {
     );
   };
 
+  const restoreBuiltinProfiles = async () => {
+    try {
+      const response = await api.restoreBuiltinProfiles();
+      const { restored, alreadyPresent } = response.data;
+      await data.refresh();
+      data.notify(
+        restored.length > 0
+          ? `Restored built-in profile(s): ${restored.join(", ")}.`
+          : "Built-in profile already present.",
+      );
+      return response.data;
+    } catch (restoreError) {
+      data.notify(getErrorMessage(restoreError), "error");
+      throw restoreError;
+    }
+  };
+
   return (
     <AppShell
       health={data.health}
@@ -188,6 +205,7 @@ function App() {
                 onDeleteProfile={deleteProfile}
                 onImportProfiles={importProfiles}
                 onExportProfiles={exportProfiles}
+                onRestoreBuiltins={restoreBuiltinProfiles}
               />
             }
           />

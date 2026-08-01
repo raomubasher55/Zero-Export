@@ -4,6 +4,7 @@ import {
   Download,
   LoaderCircle,
   Pencil,
+  RotateCcw,
   Trash2,
   Upload,
 } from "lucide-react";
@@ -25,10 +26,25 @@ export function ProfilesView({
   onDelete,
   onImport,
   onExport,
+  onRestoreBuiltins,
 }) {
   const fileInputRef = useRef(null);
   const [importing, setImporting] = useState(false);
   const [exporting, setExporting] = useState("");
+  const [restoring, setRestoring] = useState(false);
+
+  const builtInMissing = !profiles.some((profile) => profile.builtIn);
+
+  const restoreBuiltIns = async () => {
+    setRestoring(true);
+    try {
+      await onRestoreBuiltins();
+    } catch {
+      // The application-level handler displays the restore error.
+    } finally {
+      setRestoring(false);
+    }
+  };
 
   const importFile = async (event) => {
     const file = event.target.files?.[0];
@@ -91,6 +107,20 @@ export function ProfilesView({
             )}
             Import JSON
           </Button>
+          {builtInMissing && onRestoreBuiltins && (
+            <Button
+              variant="outline"
+              onClick={restoreBuiltIns}
+              disabled={restoring || importing || Boolean(exporting)}
+            >
+              {restoring ? (
+                <LoaderCircle className="h-4 w-4 animate-spin" />
+              ) : (
+                <RotateCcw className="h-4 w-4" />
+              )}
+              Restore built-ins
+            </Button>
+          )}
           <Button
             variant="outline"
             onClick={() => exportFile()}

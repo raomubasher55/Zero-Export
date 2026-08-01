@@ -117,6 +117,8 @@ export const api = {
   },
   importRegisterProfiles: (payload) =>
     request('/register-profiles/import', { method: 'POST', body: payload }),
+  restoreBuiltinProfiles: () =>
+    request('/register-profiles/restore-builtins', { method: 'POST' }),
   createRegisterProfile: (payload) => request('/register-profiles', { method: 'POST', body: payload }),
   updateRegisterProfile: (profileId, payload) => request(`/register-profiles/${profileId}`, { method: 'PATCH', body: payload }),
   deleteRegisterProfile: (profileId) => request(`/register-profiles/${profileId}`, { method: 'DELETE' }),

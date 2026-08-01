@@ -9,6 +9,7 @@ const {
   BUILTIN_PROFILES,
   seedBuiltinProfiles,
 } = require('../src/seed/builtin-profiles');
+const RegisterProfileService = require('../src/services/register-profile.service');
 
 const MEASUREMENT_SCALES = new Set([0.01, 0.0001, 0.001]);
 
@@ -121,4 +122,41 @@ test('built-in profile seed skips identifiers that already exist', async () => {
 
   const results = await seedBuiltinProfiles(repository);
   assert.deepEqual(results, [{ identifier: 'em500', action: 'SKIPPED' }]);
+});
+
+test('RegisterProfileService.restoreBuiltIns recreates deleted built-in profiles', async () => {
+  const created = [];
+  const service = new RegisterProfileService({
+    registerProfileRepository: {
+      findByIdentifier: async () => null,
+      create: async (payload) => {
+        created.push(payload);
+        return payload;
+      },
+    },
+    deviceRepository: {},
+  });
+
+  const result = await service.restoreBuiltIns();
+  assert.deepEqual(result.restored, ['em500']);
+  assert.deepEqual(result.alreadyPresent, []);
+  assert.equal(result.total, 1);
+  assert.ok(created.every((profile) => profile.builtIn === true));
+});
+
+test('RegisterProfileService.restoreBuiltIns reports profiles that already exist', async () => {
+  const service = new RegisterProfileService({
+    registerProfileRepository: {
+      findByIdentifier: async () => ({ identifier: 'em500' }),
+      create: async () => {
+        throw new Error('create must not be called');
+      },
+    },
+    deviceRepository: {},
+  });
+
+  const result = await service.restoreBuiltIns();
+  assert.deepEqual(result.restored, []);
+  assert.deepEqual(result.alreadyPresent, ['em500']);
+  assert.equal(result.total, 1);
 });
