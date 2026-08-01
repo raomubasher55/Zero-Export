@@ -27,7 +27,7 @@ import { formatValue } from "@/lib/formatters";
 const DEVICE_KEYS = ["em500", "huawei"];
 
 const DEVICE_DEFAULTS = {
-  em500: { label: "EM500 grid meter", port: "15020", unitId: "1" },
+  em500: { label: "EM500 grid meter", port: "15020", unitId: "1", loadKw: "100" },
   huawei: {
     label: "Huawei SUN2000 inverter",
     port: "15021",
@@ -50,6 +50,7 @@ export function SimulatorView({ devices, profiles, notify, onForwardProfile }) {
           updateIntervalMs: "1000",
           ratingKw: "100",
           availabilityPct: "80",
+          loadKw: "100",
         },
       ]),
     ),
@@ -78,6 +79,9 @@ export function SimulatorView({ devices, profiles, notify, onForwardProfile }) {
             ),
             availabilityPct: String(
               device.options?.availabilityPct ?? next[key]?.availabilityPct ?? 80,
+            ),
+            loadKw: String(
+              device.options?.loadKw ?? next[key]?.loadKw ?? 100,
             ),
           };
         }
@@ -156,6 +160,9 @@ export function SimulatorView({ devices, profiles, notify, onForwardProfile }) {
         ratingKw: Number(form.ratingKw),
         availabilityPct: Number(form.availabilityPct),
       };
+    }
+    if (deviceKey === "em500") {
+      payload.options = { loadKw: Number(form.loadKw) };
     }
     return run(
       deviceKey,
@@ -398,6 +405,20 @@ export function SimulatorView({ devices, profiles, notify, onForwardProfile }) {
                         />
                       </Field>
                     </>
+                  )}
+                  {key === "em500" && (
+                    <Field
+                      label="Site load (kW)"
+                      hint="Grid = load − inverter output; couples the meter to the Huawei simulator."
+                    >
+                      <Input
+                        type="number"
+                        min="0"
+                        step="0.1"
+                        value={form.loadKw}
+                        onChange={(event) => setField(key, "loadKw", event.target.value)}
+                      />
+                    </Field>
                   )}
                 </div>
 

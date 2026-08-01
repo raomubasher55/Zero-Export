@@ -199,6 +199,12 @@ repository/model, route, and validation boundaries.
   (`0.0.0.0:15021`, unit 2). The inverter simulator models solar rating and
   availability, applies FC06/FC16 derating writes to its output power, and
   exposes the derating read-back on 40125.
+- The EM500 meter simulator is **grid-point coupled**: configure a site load
+  (default 100 kW) and the meter's grid power follows `load − inverter
+  output`, exactly like a real grid connection. Limiting the inverter (from
+  the master, the controller, or the UI) immediately raises the meter's
+  import reading; when the inverter exceeds the load, the meter shows export.
+  Without a site load the meter falls back to independent values.
 - **Zero-export controller** (`/api/v1/zero-export`): every cycle it reads the
   grid power from the meter's latest polled value (positive = import) and
   steps the inverter derating register toward the target grid power — import

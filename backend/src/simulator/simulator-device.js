@@ -94,6 +94,7 @@ class SimulatorDevice {
     options = {},
     logger: deviceLogger,
     serverFactory,
+    coupledInverterKw,
   } = {}) {
     this.key = key;
     this.deviceType = deviceType;
@@ -116,6 +117,11 @@ class SimulatorDevice {
           port: configuration.port,
           unitID: configuration.unitId,
         }));
+
+    // Reads the current Huawei inverter output for grid-point coupling.
+    // Overridable in tests; defaults to the shared simulator farm (lazy
+    // require avoids the simulator <-> simulator-device circular import).
+    this.coupledInverterKw = coupledInverterKw || (() => this.defaultCoupledInverterKw());
 
     this.definitionsByAddress = new Map(); // `${registerType}:${address}` -> definition
     this.writableDefinitions = new Map(); // `${registerType}:${address}` -> definition
@@ -394,25 +400,72 @@ class SimulatorDevice {
     return this.getStatus();
   }
 
+  defaultCoupledInverterKw() {
+    try {
+      const { getDevice } = require('../simulator');
+      const inverter = getDevice('huawei');
+      if (!inverter || inverter.getStatus().state !== 'RUNNING') {
+        return 0;
+      }
+      // Read the inverter's deterministic model output (no jitter) so the
+      // meter and inverter agree on the same tick.
+      const model = inverter.model;
+      if (!model || model.deratingRaw === undefined) {
+        return 0;
+      }
+      const ratingKw = inverter.configuration.options?.ratingKw ?? 100;
+      const availabilityPct = inverter.configuration.options?.availabilityPct ?? 100;
+      const deratingFraction = clamp(model.deratingRaw, 0, 1000) / 1000;
+      let kw = ratingKw * (availabilityPct / 100) * deratingFraction;
+      if (model.fixedDeratingW > 0) {
+        kw = Math.min(kw, model.fixedDeratingW / 1000);
+      }
+      return Math.max(0, kw);
+    } catch {
+      return 0;
+    }
+  }
+
   computeEm500() {
     const model = this.model;
     const p = model.phase;
     p.voltage = p.voltage.map((v) => drift(v, 0.6, 225, 245));
-    p.current = p.current.map((i) => drift(i, 1.6, 25, 75));
     p.powerFactor = p.powerFactor.map((pf) => drift(pf, 0.006, 0.85, 0.99));
     p.frequency = drift(p.frequency, 0.02, 49.9, 50.1);
 
     const [v1, v2, v3] = p.voltage;
-    const [i1, i2, i3] = p.current;
     const [pf1, pf2, pf3] = p.powerFactor;
 
-    const active = [v1 * i1 * pf1, v2 * i2 * pf2, v3 * i3 * pf3];
-    const apparent = [v1 * i1, v2 * i2, v3 * i3];
-    const reactive = [
-      apparent[0] * Math.sqrt(Math.max(0, 1 - pf1 * pf1)),
-      apparent[1] * Math.sqrt(Math.max(0, 1 - pf2 * pf2)),
-      apparent[2] * Math.sqrt(Math.max(0, 1 - pf3 * pf3)),
-    ];
+    // Grid-point coupling: when a site load is configured, the meter's grid
+    // power follows load - inverter output (signed: import positive, export
+    // negative), exactly like a real grid connection. This makes the meter
+    // react when the inverter is derated from anywhere.
+    const loadKw = this.configuration.options?.loadKw;
+    const coupled = typeof loadKw === 'number' && loadKw > 0;
+
+    let gridW;
+    let currents;
+    if (coupled) {
+      const inverterKw = this.coupledInverterKw();
+      gridW = (loadKw - inverterKw) * 1000;
+      currents = [0, 1, 2].map(
+        (index) => Math.abs(gridW / 3) / (p.voltage[index] * p.powerFactor[index]),
+      );
+    } else {
+      p.current = p.current.map((i) => drift(i, 1.6, 25, 75));
+      currents = [...p.current];
+      gridW = v1 * currents[0] * pf1 + v2 * currents[1] * pf2 + v3 * currents[2] * pf3;
+    }
+
+    const [i1, i2, i3] = currents;
+    const active = coupled
+      ? [gridW / 3, gridW / 3, gridW / 3]
+      : [v1 * i1 * pf1, v2 * i2 * pf2, v3 * i3 * pf3];
+    const reactive = active.map(
+      (power, index) =>
+        power * Math.sqrt(Math.max(0, 1 - p.powerFactor[index] * p.powerFactor[index])),
+    );
+    const apparent = active.map((power) => Math.abs(power));
 
     const avgVoltage = (v1 + v2 + v3) / 3;
     const avgCurrent = (i1 + i2 + i3) / 3;
@@ -422,9 +475,9 @@ class SimulatorDevice {
 
     const dtHours = this.configuration.updateIntervalMs / 3600000;
     const e = model.energy;
-    const dImport = (sumActive / 1000) * dtHours;
-    const dExport = 0.02 * dtHours;
-    const dReactive = (sumReactive / 1000) * dtHours;
+    const dImport = (Math.max(sumActive, 0) / 1000) * dtHours;
+    const dExport = (Math.max(-sumActive, 0) / 1000) * dtHours;
+    const dReactive = (Math.abs(sumReactive) / 1000) * dtHours;
     const dApparent = (sumApparent / 1000) * dtHours;
 
     e.totalImportActive += dImport;
@@ -438,13 +491,13 @@ class SimulatorDevice {
     e.partialExportReactive += dReactive * 0.15;
     e.partialApparent += dApparent;
 
-    const total = sumActive || 1;
-    e.l1ImportActive += dImport * (active[0] / total);
-    e.l2ImportActive += dImport * (active[1] / total);
-    e.l3ImportActive += dImport * (active[2] / total);
-    e.l1PartialApparent += dApparent * (active[0] / total);
-    e.l2PartialApparent += dApparent * (active[1] / total);
-    e.l3PartialApparent += dApparent * (active[2] / total);
+    const total = Math.abs(sumActive) || 1;
+    e.l1ImportActive += dImport * (Math.abs(active[0]) / total);
+    e.l2ImportActive += dImport * (Math.abs(active[1]) / total);
+    e.l3ImportActive += dImport * (Math.abs(active[2]) / total);
+    e.l1PartialApparent += dApparent * (Math.abs(active[0]) / total);
+    e.l2PartialApparent += dApparent * (Math.abs(active[1]) / total);
+    e.l3PartialApparent += dApparent * (Math.abs(active[2]) / total);
 
     return {
       l1_phase_voltage: v1,

@@ -33,7 +33,7 @@ function fakeServerFactory() {
   };
 }
 
-function device({ profile, deviceType = 'EM500 meter', options = {}, configuration = {} }) {
+function device({ profile, deviceType = 'EM500 meter', options = {}, configuration = {}, coupledInverterKw }) {
   const fake = fakeServerFactory();
   const instance = new SimulatorDevice({
     key: 'test',
@@ -42,6 +42,7 @@ function device({ profile, deviceType = 'EM500 meter', options = {}, configurati
     defaultConfiguration: { ...configuration, options },
     logger: silentLogger(),
     serverFactory: fake.factory,
+    coupledInverterKw,
   });
   return { instance, fake };
 }
@@ -137,6 +138,53 @@ test('simulator manager exposes both devices and their values', async () => {
   assert.equal(simulatorDevices.em500.getStatus().port, 15020);
   assert.equal(simulatorDevices.em500.getStatus().unitId, 1);
   assert.equal(simulatorDevices.huawei.getStatus().deviceType, 'Huawei SUN2000 inverter');
+});
+
+test('EM500 simulator couples to the inverter when a site load is configured', async () => {
+  let inverterKw = 70;
+  const { instance } = device({
+    profile: EM500_PROFILE,
+    configuration: { updateIntervalMs: 60000 },
+    options: { loadKw: 100 },
+    coupledInverterKw: () => inverterKw,
+  });
+
+  // Inverter 70 kW, load 100 kW -> grid imports 30 kW.
+  instance.tick();
+  let grid = instance.values.get('eqv_active_power').value;
+  assert.ok(Math.abs(grid - 30000) < 5, `grid import ~30 kW, got ${grid / 1000} kW`);
+  const phase = instance.values.get('l1_active_power').value;
+  assert.ok(Math.abs(phase - 10000) < 5, `per-phase ~10 kW, got ${phase / 1000} kW`);
+
+  // Limit the inverter to 50 kW -> grid import rises to 50 kW (load constant).
+  inverterKw = 50;
+  instance.tick();
+  grid = instance.values.get('eqv_active_power').value;
+  assert.ok(Math.abs(grid - 50000) < 5, `grid import ~50 kW, got ${grid / 1000} kW`);
+
+  // Inverter 120 kW > load 100 kW -> grid exports 20 kW (negative).
+  inverterKw = 120;
+  instance.tick();
+  grid = instance.values.get('eqv_active_power').value;
+  assert.ok(grid < -19000, `grid export ~20 kW, got ${grid / 1000} kW`);
+
+  // Inverter stopped -> grid supplies the whole load.
+  inverterKw = 0;
+  instance.tick();
+  grid = instance.values.get('eqv_active_power').value;
+  assert.ok(Math.abs(grid - 100000) < 5, `grid supplies all, got ${grid / 1000} kW`);
+});
+
+test('EM500 simulator stays independent when no site load is configured', () => {
+  const { instance } = device({
+    profile: EM500_PROFILE,
+    configuration: { updateIntervalMs: 60000 },
+    options: {},
+    coupledInverterKw: () => 70,
+  });
+  instance.tick();
+  const grid = instance.values.get('eqv_active_power').value;
+  assert.ok(grid > 5000 && grid < 60000, `independent grid power, got ${grid / 1000} kW`);
 });
 
 test('simulator lifecycle manages server and interval', async () => {

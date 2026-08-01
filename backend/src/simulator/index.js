@@ -21,6 +21,9 @@ const simulatorDevices = Object.freeze({
       port: 15020,
       unitId: 1,
       updateIntervalMs: 1000,
+      options: {
+        loadKw: 100,
+      },
     },
   }),
   huawei: new SimulatorDevice({
@@ -58,7 +61,10 @@ function getValues(key) {
 }
 
 async function startAll() {
-  await Promise.all(Object.values(simulatorDevices).map((device) => device.start()));
+  // Start the inverter first so the coupled meter sees it running on its
+  // initial tick and reports grid = load - inverter from the first second.
+  await simulatorDevices.huawei.start();
+  await simulatorDevices.em500.start();
   return getStatus();
 }
 
