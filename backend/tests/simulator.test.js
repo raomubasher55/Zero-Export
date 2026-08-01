@@ -95,16 +95,16 @@ test('Huawei simulator serves holding registers and accepts derating writes', as
   const power = decodeRegister(HUAWEI_BY_KEY.get('active_power'), powerWords);
   assert.ok(power.value > 40 && power.value < 85, `derated power in range, got ${power.value} kW`);
 
-  // FC06 write to 40201: 500 -> 50%
-  vector.setRegister(40201, 500, 2);
+  // FC06 write to 40125: 500 -> 50%
+  vector.setRegister(40125, 500, 2);
   assert.equal(instance.model.deratingRaw, 500);
 
-  const deratingWords = vector.getMultipleHoldingRegisters(40201, 1, 2);
+  const deratingWords = vector.getMultipleHoldingRegisters(40125, 1, 2);
   const derating = decodeRegister(HUAWEI_BY_KEY.get('active_power_derating'), deratingWords);
   assert.equal(derating.value, 50, 'read-back shows 50%');
 
-  // FC16 write to 40206 (INT32, 2 registers): 30000 W
-  vector.setRegisterArray(40206, [0, 30000], 2);
+  // FC16 write to 40126 (INT32, 2 registers): 30000 W
+  vector.setRegisterArray(40126, [0, 30000], 2);
   assert.equal(instance.model.fixedDeratingW, 30000);
 
   // The simulated inverter reacts on its next update cycle.

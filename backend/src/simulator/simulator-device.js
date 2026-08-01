@@ -155,7 +155,7 @@ class SimulatorDevice {
         phaseVoltage: [230.4, 231.2, 229.8],
         pvVoltage: [610.2, 608.4, 605.1, 600.8],
         frequency: 50.03,
-        deratingRaw: 1000, // 0-1000 (0.1% steps), register 40201
+        deratingRaw: 1000, // 0-1000 (0.1% steps), register 40125
         fixedDeratingW: 0, // register 40206 (0 = disabled)
         remoteControl: 1, // register 40200
         pfCommand: 0, // register 40208

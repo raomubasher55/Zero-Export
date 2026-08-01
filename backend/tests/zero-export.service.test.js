@@ -62,7 +62,7 @@ function inverterDevice() {
           key: 'active_power_derating',
           name: 'Active power derating',
           registerType: 'HOLDING_REGISTER',
-          address: 40201,
+          address: 40125,
           dataType: 'UINT16',
           length: 1,
           scaleFactor: 0.1,
@@ -83,7 +83,7 @@ function configuration(overrides = {}) {
     meterRegisterKey: 'eqv_active_power',
     inverterDeviceId: INVERTER_ID,
     inverterRegisterKey: 'active_power_derating',
-    inverterRegisterAddress: 40201,
+    inverterRegisterAddress: 40125,
     targetGridKw: 0,
     deadbandKw: 0.5,
     stepPerCycle: 20,
@@ -158,7 +158,7 @@ test('zero-export raises derating when the grid imports above target', async () 
   service.deratingRaw = 500;
   await service.tick();
   assert.equal(writes.length, 1);
-  assert.equal(writes[0].address, 40201);
+  assert.equal(writes[0].address, 40125);
   assert.equal(writes[0].value, 520, 'one step of 20 derating units added');
   assert.equal(service.actions[0].outcome, 'WRITTEN');
   assert.equal(service.lastGridKw, 30);
@@ -223,7 +223,7 @@ test('zero-export hydrate validates devices and derives the write address', asyn
   });
 
   const hydrated = await service.hydrate(configuration());
-  assert.equal(hydrated.inverterRegisterAddress, 40201);
+  assert.equal(hydrated.inverterRegisterAddress, 40125);
 
   await assert.rejects(
     service.hydrate(configuration({ inverterRegisterKey: 'missing_key' })),

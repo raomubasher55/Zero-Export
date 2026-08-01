@@ -196,9 +196,9 @@ repository/model, route, and validation boundaries.
   efficiency, cabinet temperature, insulation resistance, device status,
   daily/total yield, battery registers, external-meter registers
   (37100–37121, import/export energy), and writable control registers:
-  `40200` remote control enable, `40201` derating (0–1000, 0.1% steps),
-  `40206` fixed limit (W), `40208` PF command, `40212` zero-export mode,
-  `40213` max feed-in (W), and battery control (47075/47077/47086).
+  `40125` derating (0–1000, 0.1% steps), `40126` fixed limit (W),
+  `40200` remote control enable, `40208` PF command, `40212` zero-export
+  mode, `40213` max feed-in (W), and battery control (47075/47077/47086).
 - The profile declares **`maxReadQuantity: 15`** — the SUN2000 rejects FC03
   reads of more than 15 registers per request. The polling planner splits
   reads into ≤15-register batches automatically, and the Huawei simulator

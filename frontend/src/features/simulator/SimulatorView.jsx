@@ -270,11 +270,11 @@ export function SimulatorView({ devices, profiles, notify, onForwardProfile }) {
     try {
       await api.rawWrite(deviceRef._id, {
         registerType: "HOLDING_REGISTER",
-        address: 40201,
+        address: 40125,
         values: [Math.round(pct * 10)],
       });
       notify(
-        `Inverter derating set to ${pct}% (raw ${Math.round(pct * 10)} on register 40201).`,
+        `Inverter derating set to ${pct}% (raw ${Math.round(pct * 10)} on register 40125).`,
       );
     } catch (writeError) {
       notify(

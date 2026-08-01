@@ -136,10 +136,12 @@ const registers = [
   register({ address: 37119, key: 'meter_total_export_energy', name: 'Meter total export energy', dataType: REGISTER_DATA_TYPES.INT32, scaleFactor: 0.01, unit: 'kWh', group: METER }),
   register({ address: 37121, key: 'meter_total_import_energy', name: 'Meter total import energy', dataType: REGISTER_DATA_TYPES.INT32, scaleFactor: 0.01, unit: 'kWh', group: METER }),
 
-  // --- Active power / remote control (40200-40213, writable) ---
+  // --- Active power / remote control (writable) ---
+  // 40125/40126 follow the site's established control layout (derating in
+  // 0.1% steps, fixed limit in W); 40200+ mirror the V3.0 remote-control map.
   register({ address: 40200, key: 'remote_power_control_enable', name: 'Remote power control enable', dataType: REGISTER_DATA_TYPES.UINT16, group: CONTROL, writable: true }),
-  register({ address: 40201, key: 'active_power_derating', name: 'Active power derating', dataType: REGISTER_DATA_TYPES.UINT16, scaleFactor: 0.1, unit: '%', group: CONTROL, writable: true }),
-  register({ address: 40206, key: 'active_power_fixed_limit', name: 'Active power fixed limit', dataType: REGISTER_DATA_TYPES.UINT32, scaleFactor: 1, unit: 'W', group: CONTROL, writable: true }),
+  register({ address: 40125, key: 'active_power_derating', name: 'Active power derating', dataType: REGISTER_DATA_TYPES.UINT16, scaleFactor: 0.1, unit: '%', group: CONTROL, writable: true }),
+  register({ address: 40126, key: 'active_power_fixed_limit', name: 'Active power fixed limit', dataType: REGISTER_DATA_TYPES.UINT32, scaleFactor: 1, unit: 'W', group: CONTROL, writable: true }),
   register({ address: 40208, key: 'reactive_power_pf_command', name: 'Reactive power PF command', dataType: REGISTER_DATA_TYPES.INT16, scaleFactor: 0.001, group: CONTROL, writable: true }),
   register({ address: 40212, key: 'zero_export_mode', name: 'Zero-export mode', dataType: REGISTER_DATA_TYPES.UINT16, group: CONTROL, writable: true }),
   register({ address: 40213, key: 'max_grid_feed_in_power', name: 'Max grid feed-in power', dataType: REGISTER_DATA_TYPES.UINT32, scaleFactor: 1, unit: 'W', group: CONTROL, writable: true }),
@@ -154,7 +156,7 @@ const HUAWEI_SUN2000_PROFILE = Object.freeze({
   identifier: 'huawei-sun2000',
   name: 'Huawei SUN2000 inverter',
   description:
-    'Built-in Huawei SUN2000 register map (Modbus Interface Definitions V3.0): identification, status/alarms, PV strings, AC measurements, yields, external meter, battery, and writable active-power control (40200 remote control enable, 40201 derating 0-1000, 40206 fixed limit W, 40212 zero-export mode, 40213 max feed-in W). Read batches are capped at 15 registers per FC03 request.',
+    'Built-in Huawei SUN2000 register map (Modbus Interface Definitions V3.0): identification, status/alarms, PV strings, AC measurements, yields, external meter, battery, and writable active-power control (40125 derating 0-1000, 40126 fixed limit W, 40200 remote control enable, 40212 zero-export mode, 40213 max feed-in W). Read batches are capped at 15 registers per FC03 request.',
   manufacturer: 'Huawei',
   model: 'SUN2000',
   registers: Object.freeze(registers),
@@ -162,9 +164,9 @@ const HUAWEI_SUN2000_PROFILE = Object.freeze({
   maxReadQuantity: 15,
   tags: Object.freeze(['huawei', 'sun2000', 'inverter', 'built-in']),
   metadata: Object.freeze({
-    profileVersion: 2,
+    profileVersion: 3,
     notes:
-      'Full V3.0 register map. maxReadQuantity 15 mirrors the SUN2000 FC03 batch limit; polling splits reads accordingly.',
+      'Full V3.0 register map. maxReadQuantity 15 mirrors the SUN2000 FC03 batch limit. Derating control lives at 40125 (0.1% steps) with fixed limit at 40126 (W), matching the site control layout.',
   }),
 });
 

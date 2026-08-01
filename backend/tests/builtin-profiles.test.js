@@ -137,10 +137,10 @@ test('built-in Huawei profile covers the full V3.0 map with a 15-register read l
   assert.equal(byKey.get('model_name').length, 15);
   assert.equal(byKey.get('serial_number').length, 10);
   assert.equal(byKey.get('pn_code').length, 10);
-  assert.equal(byKey.get('active_power_derating').address, 40201);
+  assert.equal(byKey.get('active_power_derating').address, 40125);
   assert.equal(byKey.get('active_power_derating').writable, true);
   assert.equal(byKey.get('active_power_derating').scaleFactor, 0.1);
-  assert.equal(byKey.get('active_power_fixed_limit').address, 40206);
+  assert.equal(byKey.get('active_power_fixed_limit').address, 40126);
   assert.equal(byKey.get('active_power_fixed_limit').writable, true);
   assert.equal(byKey.get('remote_power_control_enable').address, 40200);
   assert.equal(byKey.get('zero_export_mode').address, 40212);
@@ -179,11 +179,14 @@ test('built-in profile seed creates missing profiles and never overwrites existi
 });
 
 test('built-in profile seed skips identifiers that already exist at the current version', async () => {
+  const currentVersions = new Map(
+    BUILTIN_PROFILES.map((profile) => [profile.identifier, profile.metadata.profileVersion]),
+  );
   const repository = {
     findByIdentifier: async (identifier) => ({
       identifier,
       builtIn: true,
-      metadata: { profileVersion: CURRENT_PROFILE_VERSION },
+      metadata: { profileVersion: currentVersions.get(identifier) },
     }),
     create: async () => {
       throw new Error('create must not be called for existing profiles');
