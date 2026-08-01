@@ -119,6 +119,8 @@ export function ZeroExportView({ devices, profiles, notify }) {
     [devices],
   );
 
+  const devicesSelected = Boolean(form?.meterDeviceId && form?.inverterDeviceId);
+
   const run = async (operation, successMessage) => {
     setWorking(true);
     setError("");
@@ -234,7 +236,16 @@ export function ZeroExportView({ devices, profiles, notify }) {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button variant="outline" onClick={save} disabled={working || !form}>
+          <Button
+            variant="outline"
+            onClick={save}
+            disabled={working || !form || !devicesSelected}
+            title={
+              devicesSelected
+                ? "Save the controller configuration."
+                : "Select the grid meter and inverter devices first."
+            }
+          >
             <Save className="h-4 w-4" /> Save
           </Button>
           {running ? (
@@ -243,7 +254,15 @@ export function ZeroExportView({ devices, profiles, notify }) {
               Stop
             </Button>
           ) : (
-            <Button onClick={start} disabled={working}>
+            <Button
+              onClick={start}
+              disabled={working || !devicesSelected}
+              title={
+                devicesSelected
+                  ? "Start the zero-export control loop."
+                  : "Select the grid meter and inverter devices first."
+              }
+            >
               {working ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
               Start
             </Button>
@@ -388,6 +407,12 @@ export function ZeroExportView({ devices, profiles, notify }) {
                 placeholder="Select the grid meter device"
               />
             </Field>
+            {!devicesSelected && (
+              <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                Select both the grid meter device and the inverter device to
+                enable Save and Start.
+              </p>
+            )}
             <Field label="Meter register (grid power)" hint="Usually eqv_active_power (W).">
               <Select
                 value={form.meterRegisterKey}

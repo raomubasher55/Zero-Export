@@ -160,6 +160,34 @@ function App() {
     }
   };
 
+  const GATEWAY_MAPPING_FIELDS = [
+    "key",
+    "name",
+    "sourceDeviceId",
+    "sourceRegisterKey",
+    "registerType",
+    "address",
+    "dataType",
+    "length",
+    "byteOrder",
+    "wordOrder",
+    "bitIndex",
+    "scaleFactor",
+    "offset",
+    "unit",
+    "writable",
+    "enabled",
+  ];
+
+  /** GET /gateway enriches mappings with readFunctionCode/writeFunctionCodes; the PUT schema is strict, so strip server-managed fields. */
+  const sanitizeMapping = (mapping) => {
+    const clean = {};
+    for (const field of GATEWAY_MAPPING_FIELDS) {
+      if (mapping[field] !== undefined) clean[field] = mapping[field];
+    }
+    return clean;
+  };
+
   const forwardProfileToGateway = async (profile) => {
     try {
       const device = data.devices.find(
@@ -198,7 +226,10 @@ function App() {
         unitId: current.unitId,
         tcp: current.tcp,
         rtu: current.rtu,
-        mappings: [...(current.mappings || []), ...fresh],
+        mappings: [
+          ...(current.mappings || []).map(sanitizeMapping),
+          ...fresh.map(sanitizeMapping),
+        ],
       });
       data.notify(
         `${fresh.length} register(s) from “${profile.name}” added to the forwarding map at the same addresses. Review and start it in the Gateway page.`,
