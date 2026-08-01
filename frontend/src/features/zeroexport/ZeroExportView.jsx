@@ -223,11 +223,13 @@ export function ZeroExportView({ devices, profiles, notify }) {
       : null;
 
   const loadKw =
+    gridKw !== null && inverterKw !== null ? gridKw + inverterKw : null;
+  // When the controller runs in simulation mode, the planned load is shown
+  // as a hint next to the live grid + inverter sum.
+  const plannedLoadKw =
     form?.simulationEnabled && Number(form.loadKw) > 0
       ? Number(form.loadKw)
-      : gridKw !== null && inverterKw !== null
-        ? gridKw + inverterKw
-        : null;
+      : null;
 
   const deratingReading = latestValue(inverterId, "active_power_derating");
   const liveDeratingPct =
