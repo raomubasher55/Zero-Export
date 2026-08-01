@@ -409,7 +409,7 @@ export function SimulatorView({ devices, profiles, notify, onForwardProfile }) {
                   {key === "em500" && (
                     <Field
                       label="Site load (kW)"
-                      hint="Grid = load − inverter output; couples the meter to the Huawei simulator."
+                      hint="Grid = load − inverter output; synced from the zero-export page when simulation is on."
                     >
                       <Input
                         type="number"

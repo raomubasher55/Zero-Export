@@ -157,11 +157,33 @@ export function ZeroExportView({ devices, profiles, notify }) {
     },
   });
 
-  const save = () =>
-    run(() => api.updateZeroExport(payload()), "Zero-export controller saved.");
-  const start = () =>
+  /** Keep the meter simulator's site load in sync with the planned load. */
+  const syncSimulatorLoad = async (simulation) => {
+    if (!simulation?.enabled) return;
+    try {
+      await api.updateSimulatorDevice("em500", {
+        options: { loadKw: Number(simulation.loadKw) },
+      });
+    } catch {
+      // The meter simulator may not exist; the controller still works.
+    }
+  };
+
+  const saveAndMaybeSync = (body, message) =>
     run(
-      () => api.updateZeroExport({ ...payload(), enabled: true }),
+      async () => {
+        const response = await api.updateZeroExport(body);
+        await syncSimulatorLoad(body.simulation);
+        return response;
+      },
+      message,
+    );
+
+  const save = () =>
+    saveAndMaybeSync(payload(), "Zero-export controller saved.");
+  const start = () =>
+    saveAndMaybeSync(
+      { ...payload(), enabled: true },
       "Zero-export controller started.",
     );
   const stop = () =>
@@ -299,8 +321,8 @@ export function ZeroExportView({ devices, profiles, notify }) {
               <p className="text-xs text-slate-500">
                 {loadKw === null
                   ? "Waiting for meter and inverter values"
-                  : form.simulationEnabled
-                    ? "Configured simulation load"
+                  : plannedLoadKw !== null
+                    ? `Grid + inverter (planned ${formatValue(plannedLoadKw)} kW)`
                     : "Grid + inverter"}
               </p>
             </div>
@@ -364,8 +386,8 @@ export function ZeroExportView({ devices, profiles, notify }) {
                   Grid {(gridShare * 100).toFixed(0)}%
                 </span>
                 <span className="ml-auto">
-                  {form.simulationEnabled
-                    ? `Load ${formatValue(Number(form.loadKw))} kW (simulated)`
+                  {plannedLoadKw !== null
+                    ? `Load ${formatValue(loadKw)} kW (planned ${formatValue(plannedLoadKw)} kW)`
                     : `Load ${formatValue(loadKw)} kW`}
                 </span>
               </div>
