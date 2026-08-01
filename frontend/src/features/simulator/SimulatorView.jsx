@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  ArrowRightLeft,
   CirclePlus,
   FlaskConical,
   LoaderCircle,
   Play,
   Save,
   Square,
-  ArrowRightLeft,
+  Zap,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -56,6 +57,7 @@ export function SimulatorView({ devices, profiles, notify, onForwardProfile }) {
   const [values, setValues] = useState({ em500: [], huawei: [] });
   const [working, setWorking] = useState("");
   const [error, setError] = useState("");
+  const [deratingPct, setDeratingPct] = useState("100");
 
   const load = useCallback(async () => {
     try {
@@ -239,6 +241,38 @@ export function SimulatorView({ devices, profiles, notify, onForwardProfile }) {
     await onForwardProfile(profile);
   };
 
+  /** Write a derating percentage to the inverter like an external master would. */
+  const setInverterDerating = async () => {
+    const deviceRef = simulatorDevices.huawei;
+    if (!deviceRef) {
+      notify("Create the Huawei simulator device first.", "error");
+      return;
+    }
+    const pct = Number(deratingPct);
+    if (!Number.isFinite(pct) || pct < 0 || pct > 100) {
+      notify("Derating must be between 0 and 100 percent.", "error");
+      return;
+    }
+    setWorking("huawei");
+    try {
+      await api.rawWrite(deviceRef._id, {
+        registerType: "HOLDING_REGISTER",
+        address: 40125,
+        values: [Math.round(pct * 10)],
+      });
+      notify(
+        `Inverter derating set to ${pct}% (raw ${Math.round(pct * 10)} on register 40125).`,
+      );
+    } catch (writeError) {
+      notify(
+        writeError?.message || "Unable to write the derating register.",
+        "error",
+      );
+    } finally {
+      setWorking("");
+    }
+  };
+
   return (
     <div className="space-y-6">
       <section className="flex flex-col justify-between gap-4 xl:flex-row xl:items-end">
@@ -366,6 +400,37 @@ export function SimulatorView({ devices, profiles, notify, onForwardProfile }) {
                     </>
                   )}
                 </div>
+
+                {key === "huawei" && (
+                  <div className="flex flex-wrap items-end gap-2 rounded-lg border border-slate-100 bg-slate-50 p-3">
+                    <Field
+                      label="Set derating (%)"
+                      hint="Write like an external master: 40125 = percent × 10 (100 → 1000)."
+                    >
+                      <Input
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="1"
+                        value={deratingPct}
+                        onChange={(event) => setDeratingPct(event.target.value)}
+                      />
+                    </Field>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={setInverterDerating}
+                      disabled={!simulatorDevices.huawei || Boolean(working)}
+                      title={
+                        simulatorDevices.huawei
+                          ? "Write the percentage to the inverter's derating register."
+                          : "Create the Huawei simulator device first."
+                      }
+                    >
+                      <Zap className="h-4 w-4" /> Write to inverter
+                    </Button>
+                  </div>
+                )}
 
                 <div className="flex flex-wrap gap-2">
                   <Button variant="outline" size="sm" onClick={() => save(key)} disabled={busy}>

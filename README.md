@@ -210,6 +210,18 @@ repository/model, route, and validation boundaries.
   (100 kW load, inverter at 50% → grid supplies the rest) can be exercised
   end-to-end with the simulators: meter on unit 1, inverter on unit 2, and
   the controller closing the loop.
+- **External master → gateway write-through**: forwarding the Huawei profile
+  into the gateway makes the inverter registers available on the slave
+  endpoint at their same addresses (32066–32114 read, 40125/40126 writable).
+  An external master/PLC can then write the derating percentage to the
+  gateway (e.g. FC06 `40125 = 500` for 50%) and the gateway's write-through
+  converts and forwards it to the real inverter over the connection manager;
+  the inverter then raises/lowers its output, and the read-back on 40125 and
+  the power on 32080 stay visible through the gateway. The integration test
+  `master-write-through.integration.test.js` proves the full chain against
+  the simulated inverter (write 50% → output ~halves → restore → output
+  returns), and the simulator page has a **Set derating %** control that
+  performs the same write like an external master.
 - New `/simulator` page manages both simulated devices (unit IDs, ports,
   solar rating/availability, live values) and can create simulator devices
   and forward either profile; the `/zero-export` page configures and runs the
