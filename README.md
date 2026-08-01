@@ -225,7 +225,11 @@ repository/model, route, and validation boundaries.
 - New `/simulator` page manages both simulated devices (unit IDs, ports,
   solar rating/availability, live values) and can create simulator devices
   and forward either profile; the `/zero-export` page configures and runs the
-  controller and shows its recent control actions.
+  controller, shows its recent control actions, and has a live **Power flow**
+  panel that answers "how much load is on the grid vs the inverter" in one
+  place: site load (grid + inverter), inverter output with current derating,
+  grid import/export with direction, and a stacked share bar — refreshed
+  every three seconds from the latest polled values.
 
 ## Prerequisites
 

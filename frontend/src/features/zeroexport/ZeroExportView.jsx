@@ -35,6 +35,7 @@ function registerOptions(device, devices, profiles) {
 export function ZeroExportView({ devices, profiles, notify }) {
   const [data, setData] = useState(null);
   const [form, setForm] = useState(null);
+  const [latestByDevice, setLatestByDevice] = useState({});
   const [working, setWorking] = useState(false);
   const [error, setError] = useState("");
 
@@ -73,8 +74,26 @@ export function ZeroExportView({ devices, profiles, notify }) {
   }, [load]);
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      api.getZeroExport().then((response) => setData(response.data)).catch(() => undefined);
+    const interval = setInterval(async () => {
+      try {
+        const response = await api.getZeroExport();
+        setData(response.data);
+        const configuration = response.data.configuration;
+        const ids = [configuration?.meterDeviceId, configuration?.inverterDeviceId].filter(Boolean);
+        const entries = await Promise.all(
+          ids.map(async (deviceId) => {
+            try {
+              const values = await api.listLatestValues(deviceId, { limit: 100 });
+              return [String(deviceId), values.data || []];
+            } catch {
+              return [String(deviceId), []];
+            }
+          }),
+        );
+        setLatestByDevice(Object.fromEntries(entries));
+      } catch {
+        // The controller may be stopping; the next poll retries.
+      }
     }, 3000);
     return () => clearInterval(interval);
   }, []);
@@ -150,6 +169,50 @@ export function ZeroExportView({ devices, profiles, notify }) {
     ? "—"
     : `${(status.lastDerating / 10).toFixed(1)}%`;
 
+  // --- Live power flow: grid + inverter = load ---
+  const latestValue = (deviceId, key) =>
+    latestByDevice[String(deviceId || "")]?.find(
+      (value) => value.registerKey === key,
+    );
+
+  const meterId = configuration.meterDeviceId;
+  const inverterId = configuration.inverterDeviceId;
+  const meterReading = latestValue(
+    meterId,
+    configuration.meterRegisterKey || "eqv_active_power",
+  );
+  const gridKwFromMeter =
+    meterReading && meterReading.value !== null && meterReading.value !== undefined
+      ? (String(meterReading.unit || "").toLowerCase() === "w"
+          ? Number(meterReading.value) / 1000
+          : Number(meterReading.value))
+      : null;
+  const gridKw = gridKwFromMeter ?? status.lastGridKw ?? null;
+
+  const inverterReading = latestValue(inverterId, "active_power");
+  const inverterKw =
+    inverterReading && inverterReading.value !== null && inverterReading.value !== undefined
+      ? Number(inverterReading.value)
+      : null;
+
+  const loadKw =
+    form?.simulationEnabled && Number(form.loadKw) > 0
+      ? Number(form.loadKw)
+      : gridKw !== null && inverterKw !== null
+        ? gridKw + inverterKw
+        : null;
+
+  const deratingReading = latestValue(inverterId, "active_power_derating");
+  const liveDeratingPct =
+    deratingReading && deratingReading.value !== null && deratingReading.value !== undefined
+      ? Number(deratingReading.value)
+      : null;
+
+  const flowTotal = Math.max(loadKw ?? gridKw + inverterKw ?? 0, 0.001);
+  const inverterShare = inverterKw !== null ? Math.min(Math.max(inverterKw / flowTotal, 0), 1) : 0;
+  const gridShare = gridKw !== null ? Math.min(Math.max(gridKw / flowTotal, 0), 1) : 0;
+  const gridDirection = gridKw === null ? "—" : gridKw < 0 ? "exporting" : "importing";
+
   if (!form) return null;
 
   return (
@@ -189,6 +252,105 @@ export function ZeroExportView({ devices, profiles, notify }) {
       </section>
 
       <ErrorBanner message={error} />
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Zap className="h-4 w-4" /> Power flow
+            <Badge variant="outline">live</Badge>
+            {form.simulationEnabled && <Badge variant="outline">Simulation</Badge>}
+          </CardTitle>
+          <CardDescription>
+            Load is always met by grid + inverter together (load = grid +
+            inverter). Positive grid = importing, negative = exporting.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+                Site load
+              </p>
+              <p className="mt-1 text-2xl font-bold tracking-tight text-slate-900">
+                {loadKw === null ? "—" : `${formatValue(loadKw)} kW`}
+              </p>
+              <p className="text-xs text-slate-500">
+                {loadKw === null
+                  ? "Waiting for meter and inverter values"
+                  : form.simulationEnabled
+                    ? "Configured simulation load"
+                    : "Grid + inverter"}
+              </p>
+            </div>
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-emerald-700">
+                Inverter (solar)
+              </p>
+              <p className="mt-1 text-2xl font-bold tracking-tight text-emerald-900">
+                {inverterKw === null ? "—" : `${formatValue(inverterKw)} kW`}
+              </p>
+              <p className="text-xs text-emerald-700">
+                {liveDeratingPct !== null
+                  ? `derating ${formatValue(liveDeratingPct)}%`
+                  : "derating —"}
+              </p>
+            </div>
+            <div
+              className={`rounded-xl border p-4 ${
+                gridKw !== null && gridKw < 0
+                  ? "border-rose-200 bg-rose-50"
+                  : "border-amber-200 bg-amber-50"
+              }`}
+            >
+              <p className={`text-xs font-semibold uppercase tracking-[0.12em] ${
+                gridKw !== null && gridKw < 0 ? "text-rose-700" : "text-amber-700"
+              }`}>
+                Grid {gridDirection}
+              </p>
+              <p className="mt-1 text-2xl font-bold tracking-tight text-slate-900">
+                {gridKw === null
+                  ? "—"
+                  : `${formatValue(Math.abs(gridKw))} kW ${gridKw < 0 ? "export" : "import"}`}
+              </p>
+              <p className={`text-xs ${gridKw !== null && gridKw < 0 ? "text-rose-700" : "text-amber-700"}`}>
+                {gridKw === null ? "Waiting for meter" : `target ${formatValue(configuration.targetGridKw ?? 0)} kW`}
+              </p>
+            </div>
+          </div>
+
+          {loadKw !== null && loadKw > 0 && (
+            <div>
+              <div className="flex h-4 w-full overflow-hidden rounded-full bg-slate-200">
+                <div
+                  className="h-full bg-emerald-500 transition-all duration-700"
+                  style={{ width: `${(inverterShare * 100).toFixed(1)}%` }}
+                  title={`Inverter ${(inverterShare * 100).toFixed(1)}%`}
+                />
+                <div
+                  className="h-full bg-amber-400 transition-all duration-700"
+                  style={{ width: `${(gridShare * 100).toFixed(1)}%` }}
+                  title={`Grid ${(gridShare * 100).toFixed(1)}%`}
+                />
+              </div>
+              <div className="mt-2 flex flex-wrap gap-4 text-xs text-slate-500">
+                <span className="flex items-center gap-1.5">
+                  <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
+                  Inverter {(inverterShare * 100).toFixed(0)}%
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="h-2.5 w-2.5 rounded-full bg-amber-400" />
+                  Grid {(gridShare * 100).toFixed(0)}%
+                </span>
+                <span className="ml-auto">
+                  {form.simulationEnabled
+                    ? `Load ${formatValue(Number(form.loadKw))} kW (simulated)`
+                    : `Load ${formatValue(loadKw)} kW`}
+                </span>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
