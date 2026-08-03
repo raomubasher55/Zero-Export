@@ -349,6 +349,46 @@ export function SimulatorView({ devices, profiles, notify, onForwardProfile }) {
 
   const activeTarget = deratingTargets.find((target) => target.key === deratingTarget);
 
+  /** Single-inverter mode: only the selected inverter runs at `pct`; all
+   *  other inverters are set to 0% so one profile works at a time. */
+  const writeDeratingSingle = async () => {
+    const target = activeTarget;
+    if (!target) {
+      notify("Select an inverter profile first (create the simulator device).", "error");
+      return;
+    }
+    const pct = Number(deratingPct);
+    if (!Number.isFinite(pct) || pct < 0 || pct > 100) {
+      notify("Derating must be between 0 and 100 percent.", "error");
+      return;
+    }
+    setWorking(target.key);
+    try {
+      for (const other of deratingTargets) {
+        const otherPct = other.key === target.key ? pct : 0;
+        const raw = Math.round(otherPct / other.register.scaleFactor);
+        await api.rawWrite(other.device._id, {
+          registerType: "HOLDING_REGISTER",
+          address: other.register.address,
+          values: [raw],
+        });
+      }
+      const others = deratingTargets
+        .filter((other) => other.key !== target.key)
+        .map((other) => DEVICE_DEFAULTS[other.key].label)
+        .join(", ");
+      notify(
+        `${DEVICE_DEFAULTS[target.key].label} set to ${pct}%${
+          others ? `; ${others} set to 0% (single-inverter mode)` : ""
+        }.`,
+      );
+    } catch (writeError) {
+      notify(writeError?.message || "Unable to write the derating register.", "error");
+    } finally {
+      setWorking("");
+    }
+  };
+
   /** Write a derating percentage to the selected profile's register. */
   const writeDerating = async () => {
     const target = activeTarget;
@@ -508,6 +548,19 @@ export function SimulatorView({ devices, profiles, notify, onForwardProfile }) {
                   <Zap className="h-4 w-4" />
                 )}
                 Write {deratingPct}%
+              </Button>
+              <Button
+                variant="outline"
+                onClick={writeDeratingSingle}
+                disabled={!activeTarget || Boolean(working)}
+                title="Sets the selected inverter to the percentage and all others to 0%."
+              >
+                {working ? (
+                  <LoaderCircle className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Zap className="h-4 w-4" />
+                )}
+                Write {deratingPct}% (single)
               </Button>
               <div className="text-sm text-slate-500">
                 Read-back:{" "}
