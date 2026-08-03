@@ -61,6 +61,12 @@ const apiRateLimiter = rateLimit({
   },
 });
 
+// Rate limiting is opt-in (RATE_LIMIT_ENABLED=true). Personal/single-user
+// deployments with realtime polling keep it disabled.
+if (config.http.rateLimitEnabled) {
+  app.use(apiRateLimiter);
+}
+
 app.use(requestId);
 app.use(requestLogger);
 app.use(helmet());
@@ -69,7 +75,6 @@ app.use(compression());
 app.use(hpp());
 app.use(express.json({ limit: config.http.requestBodyLimit }));
 app.use(express.urlencoded({ extended: false, limit: config.http.requestBodyLimit }));
-app.use(apiRateLimiter);
 
 app.use(healthRoutes);
 app.use('/api/v1', apiRoutes);

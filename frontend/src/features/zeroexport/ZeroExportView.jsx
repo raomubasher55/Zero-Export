@@ -317,9 +317,29 @@ export function ZeroExportView({ devices, profiles, notify }) {
       ? Number(inverterReading.value)
       : null;
 
+  // Total solar: sum every inverter simulator's live output so the panel's
+  // math reconciles with the meter (grid = load − ALL solar). Solis reports
+  // watts, Huawei reports kW.
+  const SOLAR_LABELS = { huawei: "Huawei", solis: "Solis" };
+  const solarBreakdown = [];
+  for (const key of ["huawei", "solis"]) {
+    const sim = (simValues[key] || []).find((value) => value.registerKey === "active_power");
+    if (sim && sim.value !== null && sim.value !== undefined) {
+      solarBreakdown.push({
+        key,
+        label: SOLAR_LABELS[key] || key,
+        kw: key === "solis" ? Number(sim.value) / 1000 : Number(sim.value),
+      });
+    }
+  }
+  const totalSolarKw =
+    solarBreakdown.length > 0
+      ? solarBreakdown.reduce((sum, item) => sum + item.kw, 0)
+      : inverterKw;
+
   // Site load: in simulation mode the meter is coupled to the planned load
   // (grid = load − all inverter outputs), so the planned load is the correct
-  // display value. Otherwise show the live grid + configured-inverter sum.
+  // display value. Otherwise show the live grid + total solar.
   const plannedLoadKw =
     form?.simulationEnabled && Number(form.loadKw) > 0
       ? Number(form.loadKw)
@@ -327,8 +347,8 @@ export function ZeroExportView({ devices, profiles, notify }) {
   const loadKw =
     plannedLoadKw !== null
       ? plannedLoadKw
-      : gridKw !== null && inverterKw !== null
-        ? gridKw + inverterKw
+      : gridKw !== null && totalSolarKw !== null
+        ? gridKw + totalSolarKw
         : null;
 
   const deratingReading = readingFor(inverterId, "active_power_derating");
@@ -337,8 +357,8 @@ export function ZeroExportView({ devices, profiles, notify }) {
       ? Number(deratingReading.value)
       : null;
 
-  const flowTotal = Math.max(loadKw ?? gridKw + inverterKw ?? 0, 0.001);
-  const inverterShare = inverterKw !== null ? Math.min(Math.max(inverterKw / flowTotal, 0), 1) : 0;
+  const flowTotal = Math.max(loadKw ?? gridKw + totalSolarKw ?? 0, 0.001);
+  const inverterShare = totalSolarKw !== null ? Math.min(Math.max(totalSolarKw / flowTotal, 0), 1) : 0;
   const gridShare = gridKw !== null ? Math.min(Math.max(gridKw / flowTotal, 0), 1) : 0;
   const gridDirection = gridKw === null ? "—" : gridKw < 0 ? "exporting" : "importing";
 
@@ -430,10 +450,10 @@ export function ZeroExportView({ devices, profiles, notify }) {
             </div>
             <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
               <p className="text-xs font-semibold uppercase tracking-[0.12em] text-emerald-700">
-                Inverter (solar)
+                Solar total
               </p>
               <p className="mt-1 text-2xl font-bold tracking-tight text-emerald-900">
-                {inverterKw === null ? "—" : `${formatValue(inverterKw)} kW`}
+                {totalSolarKw === null ? "—" : `${formatValue(totalSolarKw)} kW`}
               </p>
               <p className="text-xs text-emerald-700">
                 {liveDeratingPct !== null
@@ -441,6 +461,18 @@ export function ZeroExportView({ devices, profiles, notify }) {
                   : "derating —"}
                 {ageText(inverterReading) && ` · ${ageText(inverterReading)}`}
               </p>
+              {solarBreakdown.length > 0 && (
+                <p className="mt-1.5 flex flex-wrap gap-1.5 text-[11px]">
+                  {solarBreakdown.map((item) => (
+                    <span
+                      key={item.key}
+                      className="rounded-md bg-emerald-100/70 px-1.5 py-0.5 font-mono"
+                    >
+                      {item.label} {formatValue(item.kw)} kW
+                    </span>
+                  ))}
+                </p>
+              )}
             </div>
             <div
               className={`rounded-xl border p-4 ${
@@ -474,7 +506,7 @@ export function ZeroExportView({ devices, profiles, notify }) {
                 <div
                   className="h-full bg-emerald-500 transition-all duration-700"
                   style={{ width: `${(inverterShare * 100).toFixed(1)}%` }}
-                  title={`Inverter ${(inverterShare * 100).toFixed(1)}%`}
+                  title={`Solar ${(inverterShare * 100).toFixed(1)}%`}
                 />
                 <div
                   className="h-full bg-amber-400 transition-all duration-700"
@@ -485,7 +517,7 @@ export function ZeroExportView({ devices, profiles, notify }) {
               <div className="mt-2 flex flex-wrap gap-4 text-xs text-slate-500">
                 <span className="flex items-center gap-1.5">
                   <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
-                  Inverter {(inverterShare * 100).toFixed(0)}%
+                  Solar {(inverterShare * 100).toFixed(0)}%
                 </span>
                 <span className="flex items-center gap-1.5">
                   <span className="h-2.5 w-2.5 rounded-full bg-amber-400" />
