@@ -209,32 +209,32 @@ test('Solis simulator serves FC04 inputs and accepts active power limit writes',
 
   const vector = instance.createVector();
 
-  const voltageWords = vector.getMultipleInputRegisters(3007, 1, 3);
+  const voltageWords = vector.getMultipleInputRegisters(3033, 1, 3);
   const voltage = decodeRegister(SOLIS_BY_KEY.get('grid_voltage_a'), voltageWords);
   assert.ok(voltage.value > 225 && voltage.value < 240, `grid voltage in range, got ${voltage.value}`);
 
-  const powerWords = vector.getMultipleInputRegisters(3002, 2, 3);
+  const powerWords = vector.getMultipleInputRegisters(3004, 2, 3);
   const power = decodeRegister(SOLIS_BY_KEY.get('active_power'), powerWords);
   assert.ok(power.value > 40000 && power.value < 90000, `output in range, got ${power.value} W`);
 
   // Power limit write: 10000 = 100%, 5000 = 50%.
-  assert.equal(vector.getHoldingRegister(3051, 3), 10000, 'limit starts at 100%');
-  vector.setRegister(3051, 5000, 3);
+  assert.equal(vector.getHoldingRegister(4049, 3), 10000, 'limit set register starts at 100%');
+  vector.setRegister(4049, 5000, 3);
   assert.equal(instance.model.deratingRaw, 5000, 'write updates the model');
   instance.tick();
-  const cappedWords = vector.getMultipleInputRegisters(3002, 2, 3);
+  const cappedWords = vector.getMultipleInputRegisters(3004, 2, 3);
   const capped = decodeRegister(SOLIS_BY_KEY.get('active_power'), cappedWords);
   assert.ok(capped.value < power.value * 0.7, `output dropped after 50% limit (${capped.value} W)`);
-  assert.equal(vector.getHoldingRegister(3051, 3), 5000, 'limit read-back');
+  assert.equal(vector.getHoldingRegister(4049, 3), 5000, 'limit set read-back');
 
   // Meter grid power is coupled to the site load.
-  const meterWords = vector.getMultipleInputRegisters(3204, 2, 3);
-  const meter = decodeRegister(SOLIS_BY_KEY.get('meter_grid_active_power'), meterWords);
+  const meterWords = vector.getMultipleInputRegisters(3083, 2, 3);
+  const meter = decodeRegister(SOLIS_BY_KEY.get('meter_active_power'), meterWords);
   assert.ok(Number.isFinite(meter.value), `meter grid power served, got ${meter.value} W`);
 
   // 51-register batch exceeds the 50-register profile limit.
   assert.throws(
-    () => vector.getMultipleInputRegisters(3002, 51, 3),
+    () => vector.getMultipleInputRegisters(3004, 51, 3),
     (error) => error.modbusErrorCode === 0x03,
   );
 
@@ -394,7 +394,7 @@ test('devices on the same port are served by unit ID (shared vector)', async () 
   assert.ok(meterWords[1] > 0, 'EM500 holding register readable on unit 1');
 
   // Solis is on unit 2 and serves input registers (FC04).
-  const solisWord = vector.getInputRegister(3007, 2);
+  const solisWord = vector.getInputRegister(3033, 2);
   assert.ok(solisWord > 0, 'Solis input register readable on unit 2');
 
   // Unknown unit ID raises a proper Modbus exception.

@@ -196,42 +196,43 @@ test('built-in Solis profile covers the Modbus RTU map with wire-offset addresse
 
   assert.equal(parsed.identifier, 'solis-inverter');
   assert.equal(parsed.maxReadQuantity, 50);
-  assert.equal(parsed.registers.length, 117);
+  assert.equal(parsed.registers.length, 59);
 
   const keys = new Set(parsed.registers.map((register) => register.key));
-  assert.equal(keys.size, 117, 'register keys must be unique');
+  assert.equal(keys.size, 59, 'register keys must be unique');
 
   const byKey = new Map(parsed.registers.map((register) => [register.key, register]));
 
   // Wire address = document register - 1.
-  assert.equal(byKey.get('grid_voltage_a').address, 3007, 'doc 3009 -> wire 3008 -> site offset 3007');
+  assert.equal(byKey.get('grid_voltage_a').address, 3033, 'manual 3034 -> wire 3033');
   assert.equal(byKey.get('grid_voltage_a').registerType, 'INPUT_REGISTER', 'Solis measurements are input registers (FC04)');
   assert.equal(byKey.get('grid_voltage_a').scaleFactor, 0.1);
-  assert.equal(byKey.get('grid_frequency').address, 3016, 'doc 3018 -> wire 3017 -> site offset 3016');
+  assert.equal(byKey.get('grid_frequency').address, 3042, 'manual 3043 -> wire 3042');
   assert.equal(byKey.get('grid_frequency').scaleFactor, 0.01);
-  assert.equal(byKey.get('active_power').address, 3002, 'doc 3004 -> wire 3003 -> site offset 3002');
+  assert.equal(byKey.get('active_power').address, 3004, 'manual 3005 -> wire 3004');
   assert.equal(byKey.get('active_power').dataType, 'UINT32');
-  assert.equal(byKey.get('reactive_power').address, 3004, 'doc 3006 -> wire 3005 -> site offset 3004');
+  assert.equal(byKey.get('reactive_power').address, 3055, 'manual 3056 -> wire 3055');
   assert.equal(byKey.get('power_factor').scaleFactor, 0.001);
-  assert.equal(byKey.get('daily_generation').address, 3013, 'doc 3014 -> wire 3013');
+  assert.equal(byKey.get('daily_generation').address, 3014, 'manual 3015 -> wire 3014');
   assert.equal(byKey.get('daily_generation').scaleFactor, 0.1);
-  assert.equal(byKey.get('meter_grid_active_power').address, 3204, 'doc 3206 -> wire 3205 -> site offset 3204');
-  assert.equal(byKey.get('meter_grid_active_power').dataType, 'INT32');
-  assert.equal(byKey.get('mppt1_voltage').address, 3499, 'doc 3500 -> wire 3499');
-  assert.equal(byKey.get('mppt15_voltage').address, 3513, 'doc 3514 -> wire 3513');
-  assert.equal(byKey.get('mppt1_current').address, 3529, 'doc 3530 -> wire 3529');
-  assert.equal(byKey.get('mppt15_current').address, 3543, 'doc 3544 -> wire 3543');
-  assert.equal(byKey.get('string1_voltage').address, 3021, 'doc 3022 -> wire 3021');
-  assert.equal(byKey.get('string1_current').address, 3022, 'doc 3023 -> wire 3022');
-  assert.equal(byKey.get('string32_voltage').address, 3083, 'doc 3084 -> wire 3083');
-  assert.equal(byKey.get('string32_current').address, 3084, 'doc 3085 -> wire 3084');
+  assert.equal(byKey.get('meter_active_power').address, 3083, 'manual 3084 -> wire 3083');
+  assert.equal(byKey.get('meter_active_power').dataType, 'INT32');
+  assert.equal(byKey.get('total_yield').address, 3008, 'manual 3009 -> wire 3008 (total yield)');
+  
+  
+  
+  assert.equal(byKey.get('dc_voltage_1').address, 3021, 'manual 3022 -> wire 3021');
+  assert.equal(byKey.get('dc_current_1').address, 3022, 'manual 3023 -> wire 3022');
+  
+  
 
   const limit = byKey.get('active_power_limit');
-  assert.equal(limit.address, 3051, 'active power limit served at document address 3051');
-  assert.equal(limit.registerType, 'HOLDING_REGISTER', 'power limit is a holding register');
-  assert.equal(limit.writable, true);
+  assert.equal(byKey.get('active_power_limit').address, 3049, 'manual 3050 -> wire 3049 (read)');
+  assert.equal(byKey.get('active_power_limit_set').address, 4049, '4X write equivalent at 4049');
+  assert.equal(byKey.get('active_power_limit_set').writable, true);
   assert.equal(limit.dataType, 'UINT16');
-  assert.equal(limit.scaleFactor, 0.1);
+  assert.equal(limit.scaleFactor, 0.01);
+  assert.equal(byKey.get('active_power_limit_set').scaleFactor, 0.01);
 
   for (const register of parsed.registers) {
     assert.ok(register.address + register.length <= 65536);

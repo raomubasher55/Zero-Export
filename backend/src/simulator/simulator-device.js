@@ -438,8 +438,8 @@ class SimulatorDevice {
     if (definition.key === 'tariff_enable') {
       this.model.tariff = Math.round(decoded.value) ? 1 : 0;
     }
-    if (definition.key === 'active_power_limit') {
-      this.model.deratingRaw = Math.min(10000, Math.max(0, Math.round(decoded.value / 0.1)));
+    if (definition.key === 'active_power_limit_set') {
+      this.model.deratingRaw = Math.min(10000, Math.max(0, Math.round(decoded.value / 0.01)));
     }
     if (definition.key === 'reactive_power_pf_command') {
       this.model.pfCommand = decoded.value;
@@ -717,36 +717,31 @@ class SimulatorDevice {
     model.dailyYieldKwh += outputKw * dtHours;
     model.monthlyYieldKwh += outputKw * dtHours;
     model.yesterdayYieldKwh += outputKw * dtHours;
+    model.yearlyYieldKwh = (model.yearlyYieldKwh || 0) + outputKw * dtHours;
+    model.lastYearYieldKwh = model.lastYearYieldKwh || 25000;
+    model.lastMonthYieldKwh = model.lastMonthYieldKwh || 1800;
 
     const avgVoltage = model.phaseVoltage.reduce((a, b) => a + b, 0) / 3;
     const pf = 0.99;
     const current = (outputKw * 1000) / (3 * avgVoltage * pf);
 
     // External-meter view: grid = load - inverter output (import positive).
+    // The Solis meter register reports + to grid / - from grid.
     const gridW = (loadKw - outputKw) * 1000;
     const importKw = Math.max(gridW, 0) / 1000;
     const exportKw = Math.max(-gridW, 0) / 1000;
     model.meterImportKwh += importKw * dtHours;
     model.meterExportKwh += exportKw * dtHours;
+    model.meterTotalWh = model.meterTotalWh || 0;
+    model.meterTotalWh += outputKw * 1000 * dtHours;
 
-    // MPPT strings: split DC power across 4 active MPPT channels.
     const dcPowerKw = outputKw / 0.982;
-    const mpptVoltages = Array.from({ length: 4 }, (_, index) => drift(600 + index * 8, 2, 560, 660));
-    const mpptCurrents = mpptVoltages.map((voltage) => clamp((dcPowerKw * 1000) / 4 / voltage, 0.5, 25));
+    const dcVoltages = Array.from({ length: 4 }, (_, index) => drift(600 + index * 8, 2, 560, 660));
+    const dcCurrents = dcVoltages.map((voltage) => clamp((dcPowerKw * 1000) / 4 / voltage, 0.5, 25));
 
-    // DC strings 1-32: 32 strings across 4 groups.
-    const stringVoltages = Array.from({ length: 32 }, (_, index) =>
-      drift(320 + (index % 8) * 6, 1.5, 280, 420),
-    );
-    const stringCurrents = stringVoltages.map((voltage) =>
-      clamp((dcPowerKw * 1000) / 32 / voltage, 0.1, 15),
-    );
-
-    const values = {
-      // The Solis AC registers are in watts (scale 1); outputKw is kW.
+    return {
+      // AC output & grid (FC04)
       active_power: outputKw * 1000,
-      reactive_power: outputKw * 1000 * 0.08,
-      apparent_power: (outputKw * 1000) / pf,
       grid_voltage_a: model.phaseVoltage[0],
       grid_voltage_b: model.phaseVoltage[1],
       grid_voltage_c: model.phaseVoltage[2],
@@ -755,31 +750,67 @@ class SimulatorDevice {
       grid_current_c: current,
       grid_frequency: model.frequency,
       power_factor: pf,
-      daily_generation: model.dailyYieldKwh,
+      reactive_power: outputKw * 1000 * 0.08,
+      apparent_power: (outputKw * 1000) / pf,
+
+      // Generation & yield (FC04)
+      total_yield: model.totalYieldKwh,
       monthly_generation: model.monthlyYieldKwh,
+      last_month_generation: model.lastMonthYieldKwh,
+      daily_generation: model.dailyYieldKwh,
       yesterday_generation: model.yesterdayYieldKwh,
+      yearly_generation: model.yearlyYieldKwh,
+      last_year_generation: model.lastYearYieldKwh,
+
+      // System status & temperatures (FC04)
+      product_model: 0x0114,
+      dsp_version: 0x0103,
+      lcd_version: 0x0102,
       inverter_temperature: 41.2,
       inverter_status: model.startedAt || this.state === 'RUNNING' ? 1 : 0,
+      serial_number_1: 0x5353, // 'SS'
+      serial_number_2: 0x3030, // '00'
+      serial_number_3: 0x3030, // '00'
+      serial_number_4: 0x3132, // '12'
       fault_code_1: 0,
       fault_code_2: 0,
-      meter_grid_active_power: gridW,
-      meter_active_power_a: gridW / 3,
-      meter_active_power_b: gridW / 3,
-      meter_active_power_c: gridW / 3,
-      active_power_limit: model.deratingRaw * 0.1, // engineering % read-back
+      fault_code_3: 0,
+      fault_code_4: 0,
+      fault_code_5: 0,
+      working_status: 0,
+      igbt_temperature: 39.8,
+
+      // Meter & grid power flow (FC04)
+      meter_total_active_generation: model.meterTotalWh,
+      meter_voltage: avgVoltage,
+      meter_current: Math.abs(gridW / 1000) / (avgVoltage * pf),
+      meter_active_power: -gridW, // + to grid / - from grid
+      internal_epm_switch: 2,
+      internal_epm_backflow_power: exportKw * 10, // 100W units
+      epm_realtime_backflow_power: exportKw * 100, // 10W units
+
+      // DC input (FC04)
+      dc_input_type: 4,
+      total_dc_power: dcPowerKw * 1000,
+      dc_busbar_voltage: dcVoltages[0] * 2,
+      dc_half_busbar_voltage: dcVoltages[0],
+      dc_voltage_1: dcVoltages[0],
+      dc_current_1: dcCurrents[0],
+      dc_voltage_2: dcVoltages[1],
+      dc_current_2: dcCurrents[1],
+      dc_voltage_3: dcVoltages[2],
+      dc_current_3: dcCurrents[2],
+      dc_voltage_4: dcVoltages[3],
+      dc_current_4: dcCurrents[3],
+
+      // Power control
+      active_power_limit: model.deratingRaw * 0.01, // engineering % (10000 -> 100%)
+      active_power_limit_set: model.deratingRaw * 0.01,
+      reactive_power_limitation: 0,
+      power_limit_switch_operation_bit: 3,
+      power_limit_switch: 0xaa,
+      reactive_power_switch: 0x55,
     };
-
-    for (let index = 0; index < 15; index += 1) {
-      const channel = index < 4 ? index : 3;
-      values[`mppt${index + 1}_voltage`] = mpptVoltages[channel];
-      values[`mppt${index + 1}_current`] = mpptCurrents[channel];
-    }
-    for (let index = 0; index < 32; index += 1) {
-      values[`string${index + 1}_voltage`] = stringVoltages[index];
-      values[`string${index + 1}_current`] = stringCurrents[index];
-    }
-
-    return values;
   }
 
   computeHuawei() {

@@ -1,22 +1,14 @@
 'use strict';
 
 /**
- * Built-in Solis (Ginlong) inverter register profile.
+ * Built-in Solis (Ginlong) inverter register profile — OFFICIAL 3X map.
  *
- * Source: Solis Inverter Modbus RTU Register Map.
+ * Source: Solis Inverter Official Modbus RTU Register Map (3X Series).
  *
- * Wire Address = Document Register - 1. Real-time measurements are input
- * registers (FC04); the power-limit control register is a holding register
- * (FC03 read / FC06·FC16 write).
- *
- * Conflicts resolved from the source table:
- *  - Reactive power placed at 0x0BBD (wire 3005) instead of 0x0BBC so it
- *    does not overlap active power (wire 3003-3004).
- *  - Total generation was listed at the same address as Grid Voltage A
- *    (0x0BC0); omitted until the correct address is confirmed.
- *
- * maxReadQuantity: 50 — the protocol recommends frames of at most 100 bytes
- * (50 registers).
+ * Wire Address = Manual Register - 1. Real-time measurements, yields,
+ * status, meter and DC values are input registers (FC04). The active power
+ * limit is read at wire 3049 (FC04) and set through the 4X holding
+ * equivalent at 4049 (FC06/FC16, 10000 = 100%, scale 0.01).
  */
 
 const { REGISTER_DATA_TYPES } = require('../constants/modbus');
@@ -26,9 +18,8 @@ function register({ address, key, name, dataType, scaleFactor = 1, unit, group, 
   return {
     key,
     name,
-    // Solis real-time measurements are input registers (FC04) per the Solis
-    // Modbus RTU protocol; the writable power limit is a holding register
-    // (FC03 read / FC06·FC16 write).
+    // Solis measurements are input registers (FC04); the writable power
+    // limit set register is a holding register (4X equivalent, FC06/FC16).
     registerType: writable ? 'HOLDING_REGISTER' : 'INPUT_REGISTER',
     address,
     dataType,
@@ -50,118 +41,98 @@ const MEASUREMENTS = 'Measurements';
 const ENERGY = 'Energy';
 const STATUS = 'Status';
 const METER = 'Meter';
-const MPPT = 'MPPT';
-const STRINGS = 'PV Strings';
+const DC = 'DC Input';
 const CONTROL = 'Control';
 
 const registers = [
   // --- AC output & grid (FC04) ---
-  register({ address: 3003, key: 'active_power', name: 'Active power (AC output)', dataType: REGISTER_DATA_TYPES.UINT32, scaleFactor: 1, unit: 'W', group: MEASUREMENTS }),
-  register({ address: 3005, key: 'reactive_power', name: 'Reactive power', dataType: REGISTER_DATA_TYPES.INT32, scaleFactor: 1, unit: 'VAr', group: MEASUREMENTS }),
-  register({ address: 3008, key: 'grid_voltage_a', name: 'Grid voltage A (R-phase)', dataType: REGISTER_DATA_TYPES.UINT16, scaleFactor: 0.1, unit: 'V', group: MEASUREMENTS }),
-  register({ address: 3009, key: 'grid_voltage_b', name: 'Grid voltage B (S-phase)', dataType: REGISTER_DATA_TYPES.UINT16, scaleFactor: 0.1, unit: 'V', group: MEASUREMENTS }),
-  register({ address: 3010, key: 'grid_voltage_c', name: 'Grid voltage C (T-phase)', dataType: REGISTER_DATA_TYPES.UINT16, scaleFactor: 0.1, unit: 'V', group: MEASUREMENTS }),
-  register({ address: 3011, key: 'grid_current_a', name: 'Grid current A (R-phase)', dataType: REGISTER_DATA_TYPES.UINT16, scaleFactor: 0.1, unit: 'A', group: MEASUREMENTS }),
-  register({ address: 3012, key: 'grid_current_b', name: 'Grid current B (S-phase)', dataType: REGISTER_DATA_TYPES.UINT16, scaleFactor: 0.1, unit: 'A', group: MEASUREMENTS }),
-  register({ address: 3013, key: 'grid_current_c', name: 'Grid current C (T-phase)', dataType: REGISTER_DATA_TYPES.UINT16, scaleFactor: 0.1, unit: 'A', group: MEASUREMENTS }),
-  register({ address: 3017, key: 'grid_frequency', name: 'Grid frequency', dataType: REGISTER_DATA_TYPES.UINT16, scaleFactor: 0.01, unit: 'Hz', group: MEASUREMENTS }),
-  register({ address: 3034, key: 'power_factor', name: 'Power factor', dataType: REGISTER_DATA_TYPES.INT16, scaleFactor: 0.001, group: MEASUREMENTS }),
-  register({ address: 3056, key: 'apparent_power', name: 'Apparent power', dataType: REGISTER_DATA_TYPES.UINT32, scaleFactor: 1, unit: 'VA', group: MEASUREMENTS }),
+  register({ address: 3004, key: 'active_power', name: 'Active power (AC output)', dataType: REGISTER_DATA_TYPES.UINT32, scaleFactor: 1, unit: 'W', group: MEASUREMENTS }),
+  register({ address: 3033, key: 'grid_voltage_a', name: 'Grid voltage A (A phase / AB line)', dataType: REGISTER_DATA_TYPES.UINT16, scaleFactor: 0.1, unit: 'V', group: MEASUREMENTS }),
+  register({ address: 3034, key: 'grid_voltage_b', name: 'Grid voltage B (B phase / BC line)', dataType: REGISTER_DATA_TYPES.UINT16, scaleFactor: 0.1, unit: 'V', group: MEASUREMENTS }),
+  register({ address: 3035, key: 'grid_voltage_c', name: 'Grid voltage C (C phase / CA line)', dataType: REGISTER_DATA_TYPES.UINT16, scaleFactor: 0.1, unit: 'V', group: MEASUREMENTS }),
+  register({ address: 3036, key: 'grid_current_a', name: 'Grid current A', dataType: REGISTER_DATA_TYPES.UINT16, scaleFactor: 0.1, unit: 'A', group: MEASUREMENTS }),
+  register({ address: 3037, key: 'grid_current_b', name: 'Grid current B', dataType: REGISTER_DATA_TYPES.UINT16, scaleFactor: 0.1, unit: 'A', group: MEASUREMENTS }),
+  register({ address: 3038, key: 'grid_current_c', name: 'Grid current C', dataType: REGISTER_DATA_TYPES.UINT16, scaleFactor: 0.1, unit: 'A', group: MEASUREMENTS }),
+  register({ address: 3042, key: 'grid_frequency', name: 'Grid frequency', dataType: REGISTER_DATA_TYPES.UINT16, scaleFactor: 0.01, unit: 'Hz', group: MEASUREMENTS }),
+  register({ address: 3050, key: 'power_factor', name: 'Power factor (actual adjust value)', dataType: REGISTER_DATA_TYPES.INT16, scaleFactor: 0.001, group: MEASUREMENTS }),
+  register({ address: 3055, key: 'reactive_power', name: 'Reactive power', dataType: REGISTER_DATA_TYPES.INT32, scaleFactor: 1, unit: 'Var', group: MEASUREMENTS }),
+  register({ address: 3057, key: 'apparent_power', name: 'Apparent power', dataType: REGISTER_DATA_TYPES.INT32, scaleFactor: 1, unit: 'VA', group: MEASUREMENTS }),
 
-  // --- Generation & yield (FC04) ---
-  register({ address: 3014, key: 'daily_generation', name: 'Daily generation', dataType: REGISTER_DATA_TYPES.UINT16, scaleFactor: 0.1, unit: 'kWh', group: ENERGY }),
-  register({ address: 3015, key: 'monthly_generation', name: 'Monthly generation', dataType: REGISTER_DATA_TYPES.UINT32, scaleFactor: 1, unit: 'kWh', group: ENERGY }),
-  register({ address: 3018, key: 'yesterday_generation', name: 'Yesterday generation', dataType: REGISTER_DATA_TYPES.UINT16, scaleFactor: 0.1, unit: 'kWh', group: ENERGY }),
+  // --- Generation & energy yield (FC04) ---
+  register({ address: 3008, key: 'total_yield', name: 'Total energy (lifetime)', dataType: REGISTER_DATA_TYPES.UINT32, scaleFactor: 1, unit: 'kWh', group: ENERGY }),
+  register({ address: 3010, key: 'monthly_generation', name: 'Energy this month', dataType: REGISTER_DATA_TYPES.UINT32, scaleFactor: 1, unit: 'kWh', group: ENERGY }),
+  register({ address: 3012, key: 'last_month_generation', name: 'Energy last month', dataType: REGISTER_DATA_TYPES.UINT32, scaleFactor: 1, unit: 'kWh', group: ENERGY }),
+  register({ address: 3014, key: 'daily_generation', name: 'Energy today', dataType: REGISTER_DATA_TYPES.UINT16, scaleFactor: 0.1, unit: 'kWh', group: ENERGY }),
+  register({ address: 3015, key: 'yesterday_generation', name: 'Energy last day (yesterday)', dataType: REGISTER_DATA_TYPES.UINT16, scaleFactor: 0.1, unit: 'kWh', group: ENERGY }),
+  register({ address: 3016, key: 'yearly_generation', name: 'Energy this year', dataType: REGISTER_DATA_TYPES.UINT32, scaleFactor: 1, unit: 'kWh', group: ENERGY }),
+  register({ address: 3018, key: 'last_year_generation', name: 'Energy last year', dataType: REGISTER_DATA_TYPES.UINT32, scaleFactor: 1, unit: 'kWh', group: ENERGY }),
 
   // --- System status & temperatures (FC04) ---
-  register({ address: 3040, key: 'inverter_temperature', name: 'Inverter temperature', dataType: REGISTER_DATA_TYPES.INT16, scaleFactor: 0.1, unit: '°C', group: STATUS }),
-  register({ address: 3042, key: 'inverter_status', name: 'Inverter operating status', dataType: REGISTER_DATA_TYPES.UINT16, group: STATUS }),
-  register({ address: 3043, key: 'fault_code_1', name: 'Fault code 1', dataType: REGISTER_DATA_TYPES.UINT16, group: STATUS }),
-  register({ address: 3044, key: 'fault_code_2', name: 'Fault code 2', dataType: REGISTER_DATA_TYPES.UINT16, group: STATUS }),
+  register({ address: 2999, key: 'product_model', name: 'Product model', dataType: REGISTER_DATA_TYPES.UINT16, group: STATUS }),
+  register({ address: 3000, key: 'dsp_version', name: 'DSP software version', dataType: REGISTER_DATA_TYPES.UINT16, group: STATUS }),
+  register({ address: 3001, key: 'lcd_version', name: 'LCD software version', dataType: REGISTER_DATA_TYPES.UINT16, group: STATUS }),
+  register({ address: 3041, key: 'inverter_temperature', name: 'Inverter temperature', dataType: REGISTER_DATA_TYPES.UINT16, scaleFactor: 0.1, unit: '°C', group: STATUS }),
+  register({ address: 3043, key: 'inverter_status', name: 'Inverter status', dataType: REGISTER_DATA_TYPES.UINT16, group: STATUS }),
+  register({ address: 3060, key: 'serial_number_1', name: 'Serial number 1 (ASCII)', dataType: REGISTER_DATA_TYPES.UINT16, group: STATUS }),
+  register({ address: 3061, key: 'serial_number_2', name: 'Serial number 2 (ASCII)', dataType: REGISTER_DATA_TYPES.UINT16, group: STATUS }),
+  register({ address: 3062, key: 'serial_number_3', name: 'Serial number 3 (ASCII)', dataType: REGISTER_DATA_TYPES.UINT16, group: STATUS }),
+  register({ address: 3063, key: 'serial_number_4', name: 'Serial number 4 (ASCII)', dataType: REGISTER_DATA_TYPES.UINT16, group: STATUS }),
+  register({ address: 3066, key: 'fault_code_1', name: 'Fault code 1', dataType: REGISTER_DATA_TYPES.UINT16, group: STATUS }),
+  register({ address: 3067, key: 'fault_code_2', name: 'Fault code 2', dataType: REGISTER_DATA_TYPES.UINT16, group: STATUS }),
+  register({ address: 3068, key: 'fault_code_3', name: 'Fault code 3', dataType: REGISTER_DATA_TYPES.UINT16, group: STATUS }),
+  register({ address: 3069, key: 'fault_code_4', name: 'Fault code 4', dataType: REGISTER_DATA_TYPES.UINT16, group: STATUS }),
+  register({ address: 3070, key: 'fault_code_5', name: 'Fault code 5', dataType: REGISTER_DATA_TYPES.UINT16, group: STATUS }),
+  register({ address: 3071, key: 'working_status', name: 'Working status', dataType: REGISTER_DATA_TYPES.UINT16, group: STATUS }),
+  register({ address: 3092, key: 'igbt_temperature', name: 'AC NTC (IGBT) temperature', dataType: REGISTER_DATA_TYPES.INT16, scaleFactor: 0.1, unit: '°C', group: STATUS }),
 
   // --- Meter & grid power flow (FC04) ---
-  register({ address: 3205, key: 'meter_grid_active_power', name: 'Grid active power (meter)', dataType: REGISTER_DATA_TYPES.INT32, scaleFactor: 1, unit: 'W', group: METER }),
-  register({ address: 3207, key: 'meter_active_power_a', name: 'Meter active power A', dataType: REGISTER_DATA_TYPES.INT32, scaleFactor: 1, unit: 'W', group: METER }),
-  register({ address: 3209, key: 'meter_active_power_b', name: 'Meter active power B', dataType: REGISTER_DATA_TYPES.INT32, scaleFactor: 1, unit: 'W', group: METER }),
-  register({ address: 3211, key: 'meter_active_power_c', name: 'Meter active power C', dataType: REGISTER_DATA_TYPES.INT32, scaleFactor: 1, unit: 'W', group: METER }),
+  register({ address: 3079, key: 'meter_total_active_generation', name: 'Meter total active generation', dataType: REGISTER_DATA_TYPES.UINT32, scaleFactor: 1, unit: 'Wh', group: METER }),
+  register({ address: 3081, key: 'meter_voltage', name: 'Meter voltage', dataType: REGISTER_DATA_TYPES.UINT16, scaleFactor: 0.1, unit: 'V', group: METER }),
+  register({ address: 3082, key: 'meter_current', name: 'Meter current', dataType: REGISTER_DATA_TYPES.UINT16, scaleFactor: 0.1, unit: 'A', group: METER }),
+  register({ address: 3083, key: 'meter_active_power', name: 'Meter active power (+ to grid / - from grid)', dataType: REGISTER_DATA_TYPES.INT32, scaleFactor: 1, unit: 'W', group: METER }),
+  register({ address: 3110, key: 'internal_epm_switch', name: 'Internal EPM switch', dataType: REGISTER_DATA_TYPES.UINT16, group: METER }),
+  register({ address: 3111, key: 'internal_epm_backflow_power', name: 'Internal EPM backflow power', dataType: REGISTER_DATA_TYPES.INT16, scaleFactor: 100, unit: 'W', group: METER }),
+  register({ address: 3113, key: 'epm_realtime_backflow_power', name: 'EPM real-time backflow power', dataType: REGISTER_DATA_TYPES.UINT16, scaleFactor: 10, unit: 'W', group: METER }),
 
-  // --- MPPT 1-15 (FC04) ---
-  register({ address: 3500, key: 'mppt1_voltage', name: 'MPPT 1 voltage', dataType: REGISTER_DATA_TYPES.UINT16, scaleFactor: 0.1, unit: 'V', group: MPPT }),
-  register({ address: 3501, key: 'mppt2_voltage', name: 'MPPT 2 voltage', dataType: REGISTER_DATA_TYPES.UINT16, scaleFactor: 0.1, unit: 'V', group: MPPT }),
-  register({ address: 3502, key: 'mppt3_voltage', name: 'MPPT 3 voltage', dataType: REGISTER_DATA_TYPES.UINT16, scaleFactor: 0.1, unit: 'V', group: MPPT }),
-  register({ address: 3503, key: 'mppt4_voltage', name: 'MPPT 4 voltage', dataType: REGISTER_DATA_TYPES.UINT16, scaleFactor: 0.1, unit: 'V', group: MPPT }),
-  register({ address: 3504, key: 'mppt5_voltage', name: 'MPPT 5 voltage', dataType: REGISTER_DATA_TYPES.UINT16, scaleFactor: 0.1, unit: 'V', group: MPPT }),
-  register({ address: 3505, key: 'mppt6_voltage', name: 'MPPT 6 voltage', dataType: REGISTER_DATA_TYPES.UINT16, scaleFactor: 0.1, unit: 'V', group: MPPT }),
-  register({ address: 3506, key: 'mppt7_voltage', name: 'MPPT 7 voltage', dataType: REGISTER_DATA_TYPES.UINT16, scaleFactor: 0.1, unit: 'V', group: MPPT }),
-  register({ address: 3507, key: 'mppt8_voltage', name: 'MPPT 8 voltage', dataType: REGISTER_DATA_TYPES.UINT16, scaleFactor: 0.1, unit: 'V', group: MPPT }),
-  register({ address: 3508, key: 'mppt9_voltage', name: 'MPPT 9 voltage', dataType: REGISTER_DATA_TYPES.UINT16, scaleFactor: 0.1, unit: 'V', group: MPPT }),
-  register({ address: 3509, key: 'mppt10_voltage', name: 'MPPT 10 voltage', dataType: REGISTER_DATA_TYPES.UINT16, scaleFactor: 0.1, unit: 'V', group: MPPT }),
-  register({ address: 3510, key: 'mppt11_voltage', name: 'MPPT 11 voltage', dataType: REGISTER_DATA_TYPES.UINT16, scaleFactor: 0.1, unit: 'V', group: MPPT }),
-  register({ address: 3511, key: 'mppt12_voltage', name: 'MPPT 12 voltage', dataType: REGISTER_DATA_TYPES.UINT16, scaleFactor: 0.1, unit: 'V', group: MPPT }),
-  register({ address: 3512, key: 'mppt13_voltage', name: 'MPPT 13 voltage', dataType: REGISTER_DATA_TYPES.UINT16, scaleFactor: 0.1, unit: 'V', group: MPPT }),
-  register({ address: 3513, key: 'mppt14_voltage', name: 'MPPT 14 voltage', dataType: REGISTER_DATA_TYPES.UINT16, scaleFactor: 0.1, unit: 'V', group: MPPT }),
-  register({ address: 3514, key: 'mppt15_voltage', name: 'MPPT 15 voltage', dataType: REGISTER_DATA_TYPES.UINT16, scaleFactor: 0.1, unit: 'V', group: MPPT }),
-  register({ address: 3530, key: 'mppt1_current', name: 'MPPT 1 current', dataType: REGISTER_DATA_TYPES.UINT16, scaleFactor: 0.1, unit: 'A', group: MPPT }),
-  register({ address: 3531, key: 'mppt2_current', name: 'MPPT 2 current', dataType: REGISTER_DATA_TYPES.UINT16, scaleFactor: 0.1, unit: 'A', group: MPPT }),
-  register({ address: 3532, key: 'mppt3_current', name: 'MPPT 3 current', dataType: REGISTER_DATA_TYPES.UINT16, scaleFactor: 0.1, unit: 'A', group: MPPT }),
-  register({ address: 3533, key: 'mppt4_current', name: 'MPPT 4 current', dataType: REGISTER_DATA_TYPES.UINT16, scaleFactor: 0.1, unit: 'A', group: MPPT }),
-  register({ address: 3534, key: 'mppt5_current', name: 'MPPT 5 current', dataType: REGISTER_DATA_TYPES.UINT16, scaleFactor: 0.1, unit: 'A', group: MPPT }),
-  register({ address: 3535, key: 'mppt6_current', name: 'MPPT 6 current', dataType: REGISTER_DATA_TYPES.UINT16, scaleFactor: 0.1, unit: 'A', group: MPPT }),
-  register({ address: 3536, key: 'mppt7_current', name: 'MPPT 7 current', dataType: REGISTER_DATA_TYPES.UINT16, scaleFactor: 0.1, unit: 'A', group: MPPT }),
-  register({ address: 3537, key: 'mppt8_current', name: 'MPPT 8 current', dataType: REGISTER_DATA_TYPES.UINT16, scaleFactor: 0.1, unit: 'A', group: MPPT }),
-  register({ address: 3538, key: 'mppt9_current', name: 'MPPT 9 current', dataType: REGISTER_DATA_TYPES.UINT16, scaleFactor: 0.1, unit: 'A', group: MPPT }),
-  register({ address: 3539, key: 'mppt10_current', name: 'MPPT 10 current', dataType: REGISTER_DATA_TYPES.UINT16, scaleFactor: 0.1, unit: 'A', group: MPPT }),
-  register({ address: 3540, key: 'mppt11_current', name: 'MPPT 11 current', dataType: REGISTER_DATA_TYPES.UINT16, scaleFactor: 0.1, unit: 'A', group: MPPT }),
-  register({ address: 3541, key: 'mppt12_current', name: 'MPPT 12 current', dataType: REGISTER_DATA_TYPES.UINT16, scaleFactor: 0.1, unit: 'A', group: MPPT }),
-  register({ address: 3542, key: 'mppt13_current', name: 'MPPT 13 current', dataType: REGISTER_DATA_TYPES.UINT16, scaleFactor: 0.1, unit: 'A', group: MPPT }),
-  register({ address: 3543, key: 'mppt14_current', name: 'MPPT 14 current', dataType: REGISTER_DATA_TYPES.UINT16, scaleFactor: 0.1, unit: 'A', group: MPPT }),
-  register({ address: 3544, key: 'mppt15_current', name: 'MPPT 15 current', dataType: REGISTER_DATA_TYPES.UINT16, scaleFactor: 0.1, unit: 'A', group: MPPT }),
+  // --- DC input (FC04) ---
+  register({ address: 3003, key: 'dc_input_type', name: 'DC input type', dataType: REGISTER_DATA_TYPES.UINT16, group: DC }),
+  register({ address: 3006, key: 'total_dc_power', name: 'Total DC output power', dataType: REGISTER_DATA_TYPES.UINT32, scaleFactor: 1, unit: 'W', group: DC }),
+  register({ address: 3031, key: 'dc_busbar_voltage', name: 'DC busbar voltage', dataType: REGISTER_DATA_TYPES.UINT16, scaleFactor: 1, unit: 'V', group: DC }),
+  register({ address: 3032, key: 'dc_half_busbar_voltage', name: 'DC half-busbar voltage', dataType: REGISTER_DATA_TYPES.UINT16, scaleFactor: 1, unit: 'V', group: DC }),
+  register({ address: 3021, key: 'dc_voltage_1', name: 'DC voltage 1', dataType: REGISTER_DATA_TYPES.UINT16, scaleFactor: 0.1, unit: 'V', group: DC }),
+  register({ address: 3022, key: 'dc_current_1', name: 'DC current 1', dataType: REGISTER_DATA_TYPES.UINT16, scaleFactor: 0.1, unit: 'A', group: DC }),
+  register({ address: 3023, key: 'dc_voltage_2', name: 'DC voltage 2', dataType: REGISTER_DATA_TYPES.UINT16, scaleFactor: 0.1, unit: 'V', group: DC }),
+  register({ address: 3024, key: 'dc_current_2', name: 'DC current 2', dataType: REGISTER_DATA_TYPES.UINT16, scaleFactor: 0.1, unit: 'A', group: DC }),
+  register({ address: 3025, key: 'dc_voltage_3', name: 'DC voltage 3', dataType: REGISTER_DATA_TYPES.UINT16, scaleFactor: 0.1, unit: 'V', group: DC }),
+  register({ address: 3026, key: 'dc_current_3', name: 'DC current 3', dataType: REGISTER_DATA_TYPES.UINT16, scaleFactor: 0.1, unit: 'A', group: DC }),
+  register({ address: 3027, key: 'dc_voltage_4', name: 'DC voltage 4', dataType: REGISTER_DATA_TYPES.UINT16, scaleFactor: 0.1, unit: 'V', group: DC }),
+  register({ address: 3028, key: 'dc_current_4', name: 'DC current 4', dataType: REGISTER_DATA_TYPES.UINT16, scaleFactor: 0.1, unit: 'A', group: DC }),
 
-  // --- DC string voltage & current channels 1-32 (FC04) ---
-  // Voltage at even wire addresses 3022..3084, current at odd 3023..3085.
+  // --- Power control (FC04 read / 4X write) ---
+  register({ address: 3049, key: 'active_power_limit', name: 'Power limit actual value', dataType: REGISTER_DATA_TYPES.UINT16, scaleFactor: 0.01, unit: '%', group: CONTROL }),
+  register({ address: 3052, key: 'reactive_power_limitation', name: 'Reactive power limitation', dataType: REGISTER_DATA_TYPES.INT16, scaleFactor: 1, unit: '%', group: CONTROL }),
+  register({ address: 3087, key: 'power_limit_switch_operation_bit', name: 'Power limit switch operation bit', dataType: REGISTER_DATA_TYPES.UINT16, group: CONTROL }),
+  register({ address: 3089, key: 'power_limit_switch', name: 'Power limit switch', dataType: REGISTER_DATA_TYPES.UINT16, group: CONTROL }),
+  register({ address: 3090, key: 'reactive_power_switch', name: 'Reactive power switch', dataType: REGISTER_DATA_TYPES.UINT16, group: CONTROL }),
+  // 4X writable equivalent of the power limit (manual 3050 -> 4X wire 4049).
+  register({ address: 4049, key: 'active_power_limit_set', name: 'Active power limit (set)', dataType: REGISTER_DATA_TYPES.UINT16, scaleFactor: 0.01, unit: '%', group: CONTROL, writable: true }),
 ];
-
-// String channels 1-32 (voltage + current pairs).
-for (let channel = 1; channel <= 32; channel += 1) {
-  const voltageAddress = 3022 + (channel - 1) * 2;
-  registers.push(
-    register({ address: voltageAddress, key: `string${channel}_voltage`, name: `PV string ${channel} voltage`, dataType: REGISTER_DATA_TYPES.UINT16, scaleFactor: 0.1, unit: 'V', group: STRINGS }),
-    register({ address: voltageAddress + 1, key: `string${channel}_current`, name: `PV string ${channel} current`, dataType: REGISTER_DATA_TYPES.UINT16, scaleFactor: 0.1, unit: 'A', group: STRINGS }),
-  );
-}
-
-// --- Power control (FC03/FC06/FC16, holding) ---
-// Document register 3051 used directly as the wire address (per the site's
-// control layout). 0-10000 = 0-1000.0% in 0.1% steps.
-registers.push(
-  register({ address: 3051, key: 'active_power_limit', name: 'Active power limit', dataType: REGISTER_DATA_TYPES.UINT16, scaleFactor: 0.1, unit: '%', group: CONTROL, writable: true }),
-);
-
-// The real Solis inverter serves every register one address lower than the
-// document (wire = document - 1). Apply the offset to all measurement
-// registers; the power limit stays at 3051.
-const OFFSET_BY_ONE_KEYS = new Set(['active_power_limit']);
-const shiftedRegisters = registers.map((register) =>
-  OFFSET_BY_ONE_KEYS.has(register.key)
-    ? register
-    : { ...register, address: register.address - 1 },
-);
 
 const SOLIS_PROFILE = Object.freeze({
   identifier: 'solis-inverter',
   name: 'Solis inverter (Solics)',
   description:
-    'Built-in Solis (Ginlong) inverter register map (Modbus RTU): AC grid voltages/currents/frequency, active/apparent/reactive power, power factor, generation yields, inverter status and faults, external-meter grid power (import/export signed), 15 MPPT channels, 32 DC string channels — real-time measurements are input registers (FC04) at wire address = document register - 1; the active power limit at 3051 is a writable holding register (FC06/FC16, 0.1% steps).',
+    'Built-in Solis (Ginlong) inverter register map — official 3X series: AC grid voltages (phase/line), currents, frequency, active/reactive/apparent power, power factor, yields (today/yesterday/month/year/total), status, temperatures, serial number, fault codes, external meter (active power + to grid / - from grid), EPM, DC inputs, and power control. Wire address = manual register - 1; measurements are FC04 input registers; the power limit is read at 3049 and set at 4049 (FC06/FC16, 10000 = 100%).',
   manufacturer: 'Solis (Ginlong)',
-  model: 'Solis inverter',
-  registers: Object.freeze(shiftedRegisters),
+  model: 'Solis 3X inverter',
+  registers: Object.freeze(registers),
   isActive: true,
   maxReadQuantity: 50,
   tags: Object.freeze(['solis', 'solics', 'inverter', 'built-in']),
   metadata: Object.freeze({
-    profileVersion: 5,
+    profileVersion: 6,
     notes:
-      'Wire address = document register - 1 for every measurement register (the real Solis inverter serves one address lower); the active power limit stays at 3051. Measurements are FC04 input registers. Reactive power placed at 0x0BBD-1 to avoid overlapping active power; total generation omitted until its correct address is confirmed.',
+      'Official 3X map. Wire address = manual - 1. Total lifetime yield at 3008; phase/line voltages at 3033-3035; meter active power at 3083 (+ export / - import); power limit read 3049, write 4049 (scale 0.01).',
   }),
 });
 
