@@ -275,3 +275,41 @@ test('generateMappingsSchema rejects unknown fields and invalid areas', () => {
     (error) => error.name === 'ZodError',
   );
 });
+
+test('gateway initialize survives a stale persisted configuration', async () => {
+  let configured = null;
+  const service = new GatewayService({
+    configurationRepository: {
+      getOrDefault: async () => ({
+        key: 'primary',
+        enabled: true,
+        unitId: 1,
+        tcp: { enabled: true, host: '0.0.0.0', port: 1502 },
+        rtu: { enabled: false, serialPath: '/dev/ttyUSB1', baudRate: 9600, dataBits: 8, stopBits: 1, parity: 'none' },
+        mappings: [{ key: 'stale', sourceDeviceId: '507f1f77bcf86cd799439099' }],
+      }),
+    },
+    deviceRepository: {
+      findManyByIdsWithProfiles: async () => [], // deleted device -> stale
+    },
+    latestValueRepository: { findForSources: async () => [] },
+    runtime: {
+      configure: (configuration) => {
+        configured = configuration;
+      },
+      getStatus: () => ({ running: false, state: 'STOPPED' }),
+      start: async () => {
+        throw new Error('start must not be called for a stale config');
+      },
+    },
+    logger: { info: () => undefined, warn: () => undefined, error: () => undefined },
+  });
+
+  const result = await service.initialize();
+
+  assert.equal(result.configuration.enabled, false, 'falls back to disabled');
+  assert.deepEqual(result.configuration.mappings, [], 'falls back to an empty map');
+  assert.ok(result.initializationError?.message, 'surfaces the reason');
+  assert.equal(service.initializationError, result.initializationError);
+  assert.ok(configured.enabled === false, 'runtime configured with the safe state');
+});

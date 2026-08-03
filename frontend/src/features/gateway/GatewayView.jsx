@@ -92,6 +92,7 @@ export function GatewayView({ devices, profiles, notify }) {
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState(false);
   const [error, setError] = useState("");
+  const [initError, setInitError] = useState("");
   const [mirrorOpen, setMirrorOpen] = useState(false);
   const [mirrorDeviceId, setMirrorDeviceId] = useState("");
   const [mirrorRegisterType, setMirrorRegisterType] = useState("");
@@ -106,6 +107,7 @@ export function GatewayView({ devices, profiles, notify }) {
       setForm(createGatewayForm(response.data.configuration));
       setStatus(response.data.status);
       setError("");
+      setInitError(response.data.initializationError?.message || "");
     } catch (loadError) {
       setError(getErrorMessage(loadError));
     } finally {
@@ -366,6 +368,14 @@ export function GatewayView({ devices, profiles, notify }) {
       </section>
 
       <ErrorBanner message={error} />
+      {initError && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          The saved gateway configuration could not be applied on startup
+          (stale device mappings). The gateway is stopped with an empty map.
+          Review and save a new configuration to fix this:{" "}
+          <span className="font-medium">{initError}</span>
+        </div>
+      )}
       <GatewayStatus status={status} />
 
       <div className="grid gap-5 xl:grid-cols-2">

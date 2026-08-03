@@ -47,30 +47,57 @@ class GatewayService {
     this.latestValueRepository = options.latestValueRepository || new LatestValueRepository();
     this.runtime = options.runtime || modbusGatewayRuntime;
     this.logger = options.logger || logger;
+    this.initializationError = null;
   }
 
   async initialize() {
     const configuration = await this.configurationRepository.getOrDefault();
-    const hydrated = await this.hydrate(configuration);
-    const initialValues = await this.getInitialValues(hydrated);
-    this.runtime.configure(hydrated, initialValues);
 
-    if (configuration.enabled) {
-      try {
-        await this.runtime.start();
-      } catch (error) {
-        this.logger.error('Configured Modbus gateway could not be started', {
-          error: error.stack || error.message,
-        });
+    try {
+      const hydrated = await this.hydrate(configuration);
+      const initialValues = await this.getInitialValues(hydrated);
+      this.runtime.configure(hydrated, initialValues);
+
+      if (configuration.enabled) {
+        try {
+          await this.runtime.start();
+        } catch (error) {
+          this.logger.error('Configured Modbus gateway could not be started', {
+            error: error.stack || error.message,
+          });
+        }
       }
-    }
 
-    return this.present(configuration);
+      this.initializationError = null;
+      return this.present(configuration);
+    } catch (error) {
+      // The persisted configuration can be stale (mappings pointing at
+      // deleted devices/profiles). Never block boot on it: start with a
+      // safe disabled configuration and surface the reason in the API.
+      this.logger.warn(
+        'Persisted gateway configuration is invalid; starting with a safe disabled configuration',
+        { error: error.message || String(error) },
+      );
+      const safe = { ...configuration, enabled: false, mappings: [] };
+      this.runtime.configure(safe, []);
+      this.initializationError = {
+        message: String(error.message || 'Gateway configuration is invalid.').slice(0, 500),
+        occurredAt: new Date(),
+      };
+      return {
+        configuration: safe,
+        status: this.runtime.getStatus(),
+        initializationError: this.initializationError,
+      };
+    }
   }
 
   async get() {
     const configuration = await this.configurationRepository.getOrDefault();
-    return this.present(configuration);
+    return {
+      ...this.present(configuration),
+      initializationError: this.initializationError,
+    };
   }
 
   async update(input) {
