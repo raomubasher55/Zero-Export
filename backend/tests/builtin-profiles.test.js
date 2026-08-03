@@ -228,7 +228,7 @@ test('built-in Solis profile covers the Modbus RTU map with wire-offset addresse
 
   const limit = byKey.get('active_power_limit');
   assert.equal(byKey.get('active_power_limit').address, 3049, 'manual 3050 -> wire 3049 (read)');
-  assert.equal(byKey.get('active_power_limit_set').address, 4049, '4X write equivalent at 4049');
+  assert.equal(byKey.get('active_power_limit_set').address, 3051, 'writable power limit at 3051');
   assert.equal(byKey.get('active_power_limit_set').writable, true);
   assert.equal(limit.dataType, 'UINT16');
   assert.equal(limit.scaleFactor, 0.01);

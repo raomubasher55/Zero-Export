@@ -114,15 +114,16 @@ const registers = [
   register({ address: 3087, key: 'power_limit_switch_operation_bit', name: 'Power limit switch operation bit', dataType: REGISTER_DATA_TYPES.UINT16, group: CONTROL }),
   register({ address: 3089, key: 'power_limit_switch', name: 'Power limit switch', dataType: REGISTER_DATA_TYPES.UINT16, group: CONTROL }),
   register({ address: 3090, key: 'reactive_power_switch', name: 'Reactive power switch', dataType: REGISTER_DATA_TYPES.UINT16, group: CONTROL }),
-  // 4X writable equivalent of the power limit (manual 3050 -> 4X wire 4049).
-  register({ address: 4049, key: 'active_power_limit_set', name: 'Active power limit (set)', dataType: REGISTER_DATA_TYPES.UINT16, scaleFactor: 0.01, unit: '%', group: CONTROL, writable: true }),
+  // Writable power limit at 3051 (per the site's control layout). The read
+  // value stays at 3049; writing 3051 drives the same limit.
+  register({ address: 3051, key: 'active_power_limit_set', name: 'Active power limit (set)', dataType: REGISTER_DATA_TYPES.UINT16, scaleFactor: 0.01, unit: '%', group: CONTROL, writable: true }),
 ];
 
 const SOLIS_PROFILE = Object.freeze({
   identifier: 'solis-inverter',
   name: 'Solis inverter (Solics)',
   description:
-    'Built-in Solis (Ginlong) inverter register map — official 3X series: AC grid voltages (phase/line), currents, frequency, active/reactive/apparent power, power factor, yields (today/yesterday/month/year/total), status, temperatures, serial number, fault codes, external meter (active power + to grid / - from grid), EPM, DC inputs, and power control. Wire address = manual register - 1; measurements are FC04 input registers; the power limit is read at 3049 and set at 4049 (FC06/FC16, 10000 = 100%).',
+    'Built-in Solis (Ginlong) inverter register map — official 3X series: AC grid voltages (phase/line), currents, frequency, active/reactive/apparent power, power factor, yields (today/yesterday/month/year/total), status, temperatures, serial number, fault codes, external meter (active power + to grid / - from grid), EPM, DC inputs, and power control. Wire address = manual register - 1; measurements are FC04 input registers; the power limit is read at 3049 and set at 3051 (FC06/FC16, 10000 = 100%).',
   manufacturer: 'Solis (Ginlong)',
   model: 'Solis 3X inverter',
   registers: Object.freeze(registers),
@@ -130,9 +131,9 @@ const SOLIS_PROFILE = Object.freeze({
   maxReadQuantity: 50,
   tags: Object.freeze(['solis', 'solics', 'inverter', 'built-in']),
   metadata: Object.freeze({
-    profileVersion: 6,
+    profileVersion: 7,
     notes:
-      'Official 3X map. Wire address = manual - 1. Total lifetime yield at 3008; phase/line voltages at 3033-3035; meter active power at 3083 (+ export / - import); power limit read 3049, write 4049 (scale 0.01).',
+      'Official 3X map. Wire address = manual - 1. Total lifetime yield at 3008; phase/line voltages at 3033-3035; meter active power at 3083 (+ export / - import); power limit read 3049, write 3051 (scale 0.01, 10000 = 100%).',
   }),
 });
 
