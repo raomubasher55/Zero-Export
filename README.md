@@ -201,7 +201,7 @@ repository/model, route, and validation boundaries.
   monthly/yesterday generation, inverter status and fault codes, external
   meter grid power (3205, signed import/export), 15 MPPT channels and 32 DC
   string channels (FC04 input registers), and the writable **active power
-  limit** holding register (3050, 0–10000 = 0–1000.0% in 0.1% steps,
+  limit** holding register (3051, 0–10000 = 0–1000.0% in 0.1% steps,
   FC03/FC06/FC16). `maxReadQuantity: 50` matches the protocol's 100-byte
   frame recommendation.
 - The simulator farm gains a **Solis inverter** (port `15022`, unit 3) with

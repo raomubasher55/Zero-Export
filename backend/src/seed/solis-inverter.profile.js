@@ -128,9 +128,10 @@ for (let channel = 1; channel <= 32; channel += 1) {
 }
 
 // --- Power control (FC03/FC06/FC16, holding) ---
-// Wire address = document 3051 - 1. 0-10000 = 0-1000.0% in 0.1% steps.
+// Document register 3051 used directly as the wire address (per the site's
+// control layout). 0-10000 = 0-1000.0% in 0.1% steps.
 registers.push(
-  register({ address: 3050, key: 'active_power_limit', name: 'Active power limit', dataType: REGISTER_DATA_TYPES.UINT16, scaleFactor: 0.1, unit: '%', group: CONTROL, writable: true }),
+  register({ address: 3051, key: 'active_power_limit', name: 'Active power limit', dataType: REGISTER_DATA_TYPES.UINT16, scaleFactor: 0.1, unit: '%', group: CONTROL, writable: true }),
 );
 
 const SOLIS_PROFILE = Object.freeze({
@@ -145,9 +146,9 @@ const SOLIS_PROFILE = Object.freeze({
   maxReadQuantity: 50,
   tags: Object.freeze(['solis', 'solics', 'inverter', 'built-in']),
   metadata: Object.freeze({
-    profileVersion: 1,
+    profileVersion: 2,
     notes:
-      'Wire address = document register - 1. Reactive power placed at 0x0BBD to avoid overlapping active power; total generation omitted (listed at the same address as Grid Voltage A) until confirmed.',
+      'Active power limit served at document address 3051 (wire = 3051) per the site control layout. Reactive power placed at 0x0BBD to avoid overlapping active power; total generation omitted (listed at the same address as Grid Voltage A) until confirmed.',
   }),
 });
 

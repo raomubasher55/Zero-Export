@@ -227,7 +227,7 @@ test('built-in Solis profile covers the Modbus RTU map with wire-offset addresse
   assert.equal(byKey.get('string32_current').address, 3085);
 
   const limit = byKey.get('active_power_limit');
-  assert.equal(limit.address, 3050, 'doc 3051 -> wire 3050');
+  assert.equal(limit.address, 3051, 'active power limit served at document address 3051');
   assert.equal(limit.registerType, 'HOLDING_REGISTER', 'power limit is a holding register');
   assert.equal(limit.writable, true);
   assert.equal(limit.dataType, 'UINT16');
@@ -305,11 +305,10 @@ test('built-in profile seed upgrades stale built-in profiles to the shipped vers
   };
 
   const results = await seedBuiltinProfiles(repository);
-  // EM500 (v4) and Huawei (v3) upgrade from version 1; Solis ships at
-  // version 1, so it stays as-is.
+  // All three built-ins ship above version 1, so stale v1 built-ins upgrade.
   assert.deepEqual(
     results.map((result) => result.action),
-    ['UPDATED', 'UPDATED', 'SKIPPED'],
+    ['UPDATED', 'UPDATED', 'UPDATED'],
   );
 
   const em500Upgrade = updated.find((profile) => profile.identifier === 'em500');

@@ -44,8 +44,9 @@ const DEVICE_DEFAULTS = {
   },
 };
 
-// Derating register per inverter device (0.1% steps).
-const DERATING_REGISTER = { huawei: 40125, solis: 3050 };
+// Inverter simulator keys that expose a writable derating/power-limit
+// register in their profile.
+const DERATING_DEVICE_KEYS = ["huawei", "solis"];
 
 export function SimulatorView({ devices, profiles, notify, onForwardProfile }) {
   const [status, setStatus] = useState(null);
@@ -70,6 +71,7 @@ export function SimulatorView({ devices, profiles, notify, onForwardProfile }) {
   const [working, setWorking] = useState("");
   const [error, setError] = useState("");
   const [deratingPct, setDeratingPct] = useState("100");
+  const [deratingTarget, setDeratingTarget] = useState("");
 
   const load = useCallback(async () => {
     try {
@@ -312,11 +314,49 @@ export function SimulatorView({ devices, profiles, notify, onForwardProfile }) {
     await onForwardProfile(profile);
   };
 
-  /** Write a derating percentage to an inverter like an external master would. */
-  const setInverterDerating = async (deviceKey) => {
-    const deviceRef = simulatorDevices[deviceKey];
-    if (!deviceRef) {
-      notify(`Create the ${DEVICE_DEFAULTS[deviceKey].label} simulator device first.`, "error");
+  /** Derating targets derived from each simulator device's assigned profile:
+   *  the writable holding register whose key suggests derating / power limit. */
+  const deratingTargets = useMemo(() => {
+    const targets = [];
+    for (const key of DERATING_DEVICE_KEYS) {
+      const device = simulatorDevices[key];
+      if (!device) continue;
+      const profileId = device.registerProfile?._id;
+      const profile = profiles.find((item) => String(item._id) === String(profileId));
+      const register = profile?.registers?.find(
+        (item) =>
+          item.writable &&
+          item.registerType === "HOLDING_REGISTER" &&
+          /derating|power.?limit|limit/i.test(item.key),
+      );
+      if (register) {
+        targets.push({
+          key,
+          device,
+          register,
+          label: `${DEVICE_DEFAULTS[key].label} — ${register.key} @ ${register.address}`,
+        });
+      }
+    }
+    return targets;
+  }, [simulatorDevices, profiles]);
+
+  useEffect(() => {
+    if (!deratingTarget && deratingTargets.length > 0) {
+      setDeratingTarget(deratingTargets[0].key);
+    }
+  }, [deratingTarget, deratingTargets]);
+
+  const activeTarget = deratingTargets.find((target) => target.key === deratingTarget);
+
+  /** Write a derating percentage to the selected profile's register. */
+  const writeDerating = async () => {
+    const target = activeTarget;
+    if (!target) {
+      notify(
+        "Select an inverter profile first (create the simulator device).",
+        "error",
+      );
       return;
     }
     const pct = Number(deratingPct);
@@ -324,16 +364,16 @@ export function SimulatorView({ devices, profiles, notify, onForwardProfile }) {
       notify("Derating must be between 0 and 100 percent.", "error");
       return;
     }
-    const address = DERATING_REGISTER[deviceKey];
-    setWorking(deviceKey);
+    const raw = Math.round(pct / target.register.scaleFactor);
+    setWorking(target.key);
     try {
-      await api.rawWrite(deviceRef._id, {
+      await api.rawWrite(target.device._id, {
         registerType: "HOLDING_REGISTER",
-        address,
-        values: [Math.round(pct * 10)],
+        address: target.register.address,
+        values: [raw],
       });
       notify(
-        `${DEVICE_DEFAULTS[deviceKey].label} derating set to ${pct}% (raw ${Math.round(pct * 10)} on register ${address}).`,
+        `${DEVICE_DEFAULTS[target.key].label}: ${pct}% written to ${target.register.key} (raw ${raw} @ ${target.register.address}).`,
       );
     } catch (writeError) {
       notify(
@@ -344,6 +384,12 @@ export function SimulatorView({ devices, profiles, notify, onForwardProfile }) {
       setWorking("");
     }
   };
+
+  const liveDeratingValue = activeTarget
+    ? values[activeTarget.key]?.find(
+        (value) => value.registerKey === activeTarget.register.key,
+      )?.value
+    : null;
 
   /** Toggle the EM500 tariff register (8448): 0 = off, 1 = on. */
   const setTariff = async (enabled) => {
@@ -404,6 +450,76 @@ export function SimulatorView({ devices, profiles, notify, onForwardProfile }) {
       </section>
 
       <ErrorBanner message={error} />
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Zap className="h-4 w-4" /> Power control
+            <Badge variant="outline">profile-driven</Badge>
+          </CardTitle>
+          <CardDescription>
+            Select the inverter profile — the writable derating register from
+            that profile is used automatically (Huawei 40125, Solis 3051).
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {deratingTargets.length === 0 ? (
+            <p className="text-sm text-slate-500">
+              No inverter devices with a derating register yet. Start the
+              simulators and create the simulator devices first.
+            </p>
+          ) : (
+            <div className="flex flex-wrap items-end gap-4">
+              <Field label="Inverter profile" className="min-w-[260px] flex-1">
+                <Select
+                  value={deratingTarget}
+                  onChange={(event) => setDeratingTarget(event.target.value)}
+                  options={deratingTargets.map((target) => ({
+                    value: target.key,
+                    label: target.label,
+                  }))}
+                />
+              </Field>
+              <Field
+                label="Derating (%)"
+                hint={
+                  activeTarget
+                    ? `Writes ${activeTarget.register.scaleFactor}-step raw value to register ${activeTarget.register.address} (${activeTarget.register.key}).`
+                    : undefined
+                }
+              >
+                <Input
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="1"
+                  value={deratingPct}
+                  onChange={(event) => setDeratingPct(event.target.value)}
+                />
+              </Field>
+              <Button
+                onClick={writeDerating}
+                disabled={!activeTarget || Boolean(working)}
+              >
+                {working ? (
+                  <LoaderCircle className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Zap className="h-4 w-4" />
+                )}
+                Write {deratingPct}%
+              </Button>
+              <div className="text-sm text-slate-500">
+                Read-back:{" "}
+                <span className="font-mono font-medium text-slate-800">
+                  {liveDeratingValue === null || liveDeratingValue === undefined
+                    ? "—"
+                    : `${liveDeratingValue}%`}
+                </span>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <div className="grid gap-5 xl:grid-cols-2">
         {DEVICE_KEYS.map((key) => {
@@ -549,36 +665,7 @@ export function SimulatorView({ devices, profiles, notify, onForwardProfile }) {
                   </div>
                 )}
 
-                {(key === "huawei" || key === "solis") && (
-                  <div className="flex flex-wrap items-end gap-2 rounded-lg border border-slate-100 bg-slate-50 p-3">
-                    <Field
-                      label="Set derating (%)"
-                      hint={`Write like an external master: ${DERATING_REGISTER[key]} = percent × 10 (100 → ${DERATING_REGISTER[key] === 40125 ? 1000 : 10000}% raw = 100%).`}
-                    >
-                      <Input
-                        type="number"
-                        min="0"
-                        max="100"
-                        step="1"
-                        value={deratingPct}
-                        onChange={(event) => setDeratingPct(event.target.value)}
-                      />
-                    </Field>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setInverterDerating(key)}
-                      disabled={!simulatorDevices[key] || Boolean(working)}
-                      title={
-                        simulatorDevices[key]
-                          ? `Write the percentage to the ${DEVICE_DEFAULTS[key].label}'s derating register.`
-                          : `Create the ${DEVICE_DEFAULTS[key].label} simulator device first.`
-                      }
-                    >
-                      <Zap className="h-4 w-4" /> Write to inverter
-                    </Button>
-                  </div>
-                )}
+
 
                 <div className="flex flex-wrap gap-2">
                   <Button variant="outline" size="sm" onClick={() => save(key)} disabled={busy}>

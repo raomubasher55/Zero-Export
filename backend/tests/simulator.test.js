@@ -218,14 +218,14 @@ test('Solis simulator serves FC04 inputs and accepts active power limit writes',
   assert.ok(power.value > 40000 && power.value < 90000, `output in range, got ${power.value} W`);
 
   // Power limit write: 10000 = 100%, 5000 = 50%.
-  assert.equal(vector.getHoldingRegister(3050, 3), 10000, 'limit starts at 100%');
-  vector.setRegister(3050, 5000, 3);
+  assert.equal(vector.getHoldingRegister(3051, 3), 10000, 'limit starts at 100%');
+  vector.setRegister(3051, 5000, 3);
   assert.equal(instance.model.deratingRaw, 5000, 'write updates the model');
   instance.tick();
   const cappedWords = vector.getMultipleInputRegisters(3003, 2, 3);
   const capped = decodeRegister(SOLIS_BY_KEY.get('active_power'), cappedWords);
   assert.ok(capped.value < power.value * 0.7, `output dropped after 50% limit (${capped.value} W)`);
-  assert.equal(vector.getHoldingRegister(3050, 3), 5000, 'limit read-back');
+  assert.equal(vector.getHoldingRegister(3051, 3), 5000, 'limit read-back');
 
   // Meter grid power is coupled to the site load.
   const meterWords = vector.getMultipleInputRegisters(3205, 2, 3);
