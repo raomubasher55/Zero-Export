@@ -246,7 +246,12 @@ function getStatus() {
 
 function getValues(key) {
   const device = getDevice(key);
-  return device ? device.getValues() : [];
+  if (!device) return [];
+  // A stopped simulator must not report stale values: every consumer (the
+  // simulator page, the zero-export power flow) treats an empty list as
+  // "device not producing".
+  if (device.getStatus().state !== 'RUNNING') return [];
+  return device.getValues();
 }
 
 module.exports = {

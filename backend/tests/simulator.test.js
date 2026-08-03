@@ -406,3 +406,18 @@ test('devices on the same port are served by unit ID (shared vector)', async () 
   await em500.instance.stop();
   await solis.instance.stop();
 });
+
+test('stopped simulators report no values (no stale data)', async () => {
+  const { getValues, simulatorDevices } = require('../src/simulator');
+  const device = simulatorDevices.solis;
+  const wasRunning = device.getStatus().state === 'RUNNING';
+  if (wasRunning) await device.stop();
+
+  await device.start();
+  device.tick();
+  assert.ok(getValues('solis').length > 0, 'running device serves values');
+
+  await device.stop();
+  assert.equal(getValues('solis').length, 0, 'stopped device serves no values');
+  if (wasRunning) await device.start();
+});
