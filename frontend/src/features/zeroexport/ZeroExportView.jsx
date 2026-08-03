@@ -36,6 +36,7 @@ export function ZeroExportView({ devices, profiles, notify }) {
   const [data, setData] = useState(null);
   const [form, setForm] = useState(null);
   const [latestByDevice, setLatestByDevice] = useState({});
+  const [simValues, setSimValues] = useState({ em500: [], huawei: [], solis: [] });
   const [working, setWorking] = useState(false);
   const [error, setError] = useState("");
 
@@ -97,6 +98,16 @@ export function ZeroExportView({ devices, profiles, notify }) {
             }),
           );
           setLatestByDevice(Object.fromEntries(entries));
+
+          // Simulator live values refresh every ~1s; use them as a
+          // near-realtime fallback so external writes show up immediately
+          // even before the next device poll lands in MongoDB.
+          const [em500, huawei, solis] = await Promise.all([
+            api.getSimulatorValues("em500").then((r) => r.data || []).catch(() => []),
+            api.getSimulatorValues("huawei").then((r) => r.data || []).catch(() => []),
+            api.getSimulatorValues("solis").then((r) => r.data || []).catch(() => []),
+          ]);
+          setSimValues({ em500, huawei, solis });
           failures = 0;
           setError("");
         } catch {
@@ -219,14 +230,44 @@ export function ZeroExportView({ devices, profiles, notify }) {
     : `${(status.lastDerating / 10).toFixed(1)}%`;
 
   // --- Live power flow: grid + inverter = load ---
-  const latestValue = (deviceId, key) =>
-    latestByDevice[String(deviceId || "")]?.find(
+  /** Map a device to its simulator key so live simulator values can back the display. */
+  const simKeyForDevice = (deviceId) => {
+    const device = devices.find((item) => String(item._id) === String(deviceId));
+    const identifier = device?.identifier || "";
+    const profileId = String(device?.registerProfile?.identifier || "");
+    if (identifier === "em500-simulator" || profileId === "em500") return "em500";
+    if (identifier === "huawei-simulator" || profileId === "huawei-sun2000") return "huawei";
+    if (identifier === "solis-simulator" || profileId === "solis-inverter") return "solis";
+    return null;
+  };
+
+  /** Prefer the polled LatestValue; fall back to the simulator's live value
+   *  (refreshes every ~1s) so external writes show up immediately. */
+  const readingFor = (deviceId, key) => {
+    const latest = latestByDevice[String(deviceId || "")]?.find(
       (value) => value.registerKey === key,
     );
+    if (latest && latest.value !== null && latest.value !== undefined) {
+      return { ...latest, source: "poll" };
+    }
+    const simKey = simKeyForDevice(deviceId);
+    if (simKey) {
+      const sim = (simValues[simKey] || []).find((value) => value.registerKey === key);
+      if (sim && sim.value !== null && sim.value !== undefined) {
+        return { ...sim, source: "sim" };
+      }
+    }
+    return null;
+  };
+
+  const ageText = (reading) =>
+    reading?.sampledAt
+      ? `${Math.max(0, Math.round((Date.now() - new Date(reading.sampledAt).getTime()) / 1000))}s ago${reading.source === "sim" ? " (live)" : ""}`
+      : "";
 
   const meterId = configuration.meterDeviceId;
   const inverterId = configuration.inverterDeviceId;
-  const meterReading = latestValue(
+  const meterReading = readingFor(
     meterId,
     configuration.meterRegisterKey || "eqv_active_power",
   );
@@ -238,7 +279,7 @@ export function ZeroExportView({ devices, profiles, notify }) {
       : null;
   const gridKw = gridKwFromMeter ?? status.lastGridKw ?? null;
 
-  const inverterReading = latestValue(inverterId, "active_power");
+  const inverterReading = readingFor(inverterId, "active_power");
   const inverterKw =
     inverterReading && inverterReading.value !== null && inverterReading.value !== undefined
       ? Number(inverterReading.value)
@@ -253,7 +294,7 @@ export function ZeroExportView({ devices, profiles, notify }) {
       ? Number(form.loadKw)
       : null;
 
-  const deratingReading = latestValue(inverterId, "active_power_derating");
+  const deratingReading = readingFor(inverterId, "active_power_derating");
   const liveDeratingPct =
     deratingReading && deratingReading.value !== null && deratingReading.value !== undefined
       ? Number(deratingReading.value)
@@ -361,6 +402,7 @@ export function ZeroExportView({ devices, profiles, notify }) {
                 {liveDeratingPct !== null
                   ? `derating ${formatValue(liveDeratingPct)}%`
                   : "derating —"}
+                {ageText(inverterReading) && ` · ${ageText(inverterReading)}`}
               </p>
             </div>
             <div
@@ -381,7 +423,10 @@ export function ZeroExportView({ devices, profiles, notify }) {
                   : `${formatValue(Math.abs(gridKw))} kW ${gridKw < 0 ? "export" : "import"}`}
               </p>
               <p className={`text-xs ${gridKw !== null && gridKw < 0 ? "text-rose-700" : "text-amber-700"}`}>
-                {gridKw === null ? "Waiting for meter" : `target ${formatValue(configuration.targetGridKw ?? 0)} kW`}
+                {gridKw === null
+                  ? "Waiting for meter"
+                  : `target ${formatValue(configuration.targetGridKw ?? 0)} kW`}
+                {ageText(meterReading) && ` · ${ageText(meterReading)}`}
               </p>
             </div>
           </div>
