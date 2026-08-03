@@ -137,21 +137,31 @@ registers.push(
   register({ address: 3051, key: 'active_power_limit', name: 'Active power limit', dataType: REGISTER_DATA_TYPES.UINT16, scaleFactor: 0.1, unit: '%', group: CONTROL, writable: true }),
 );
 
+// The real Solis inverter serves every register one address lower than the
+// document (wire = document - 1). Apply the offset to all measurement
+// registers; the power limit stays at 3051.
+const OFFSET_BY_ONE_KEYS = new Set(['active_power_limit']);
+const shiftedRegisters = registers.map((register) =>
+  OFFSET_BY_ONE_KEYS.has(register.key)
+    ? register
+    : { ...register, address: register.address - 1 },
+);
+
 const SOLIS_PROFILE = Object.freeze({
   identifier: 'solis-inverter',
   name: 'Solis inverter (Solics)',
   description:
-    'Built-in Solis (Ginlong) inverter register map (Modbus RTU): AC grid voltages/currents/frequency, active/apparent/reactive power, power factor, generation yields, inverter status and faults, external-meter grid power (import/export signed), 15 MPPT channels, 32 DC string channels — real-time measurements are input registers (FC04); the active power limit at 3051 is a writable holding register (FC06/FC16, 0.1% steps).',
+    'Built-in Solis (Ginlong) inverter register map (Modbus RTU): AC grid voltages/currents/frequency, active/apparent/reactive power, power factor, generation yields, inverter status and faults, external-meter grid power (import/export signed), 15 MPPT channels, 32 DC string channels — real-time measurements are input registers (FC04) at wire address = document register - 1; the active power limit at 3051 is a writable holding register (FC06/FC16, 0.1% steps).',
   manufacturer: 'Solis (Ginlong)',
   model: 'Solis inverter',
-  registers: Object.freeze(registers),
+  registers: Object.freeze(shiftedRegisters),
   isActive: true,
   maxReadQuantity: 50,
   tags: Object.freeze(['solis', 'solics', 'inverter', 'built-in']),
   metadata: Object.freeze({
-    profileVersion: 4,
+    profileVersion: 5,
     notes:
-      'Real-time measurements served as input registers (FC04) per the Solis protocol; the active power limit stays a writable holding register at 3051. Reactive power placed at 0x0BBD to avoid overlapping active power; total generation omitted (listed at the same address as Grid Voltage A) until confirmed.',
+      'Wire address = document register - 1 for every measurement register (the real Solis inverter serves one address lower); the active power limit stays at 3051. Measurements are FC04 input registers. Reactive power placed at 0x0BBD-1 to avoid overlapping active power; total generation omitted until its correct address is confirmed.',
   }),
 });
 
