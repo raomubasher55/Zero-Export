@@ -98,16 +98,6 @@ export function ZeroExportView({ devices, profiles, notify }) {
             }),
           );
           setLatestByDevice(Object.fromEntries(entries));
-
-          // Simulator live values refresh every ~1s; use them as a
-          // near-realtime fallback so external writes show up immediately
-          // even before the next device poll lands in MongoDB.
-          const [em500, huawei, solis] = await Promise.all([
-            api.getSimulatorValues("em500").then((r) => r.data || []).catch(() => []),
-            api.getSimulatorValues("huawei").then((r) => r.data || []).catch(() => []),
-            api.getSimulatorValues("solis").then((r) => r.data || []).catch(() => []),
-          ]);
-          setSimValues({ em500, huawei, solis });
           failures = 0;
           setError("");
         } catch {
@@ -124,6 +114,38 @@ export function ZeroExportView({ devices, profiles, notify }) {
     };
 
     timer = setTimeout(tick, 3000);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, []);
+
+  // Near-realtime simulator values: the simulators tick every second, so
+  // poll them every second independently of the 3s zero-export poll.
+  useEffect(() => {
+    let cancelled = false;
+    let timer;
+    let failures = 0;
+
+    const tick = async () => {
+      if (cancelled) return;
+      if (!document.hidden) {
+        try {
+          const [em500, huawei, solis] = await Promise.all([
+            api.getSimulatorValues("em500").then((r) => r.data || []).catch(() => []),
+            api.getSimulatorValues("huawei").then((r) => r.data || []).catch(() => []),
+            api.getSimulatorValues("solis").then((r) => r.data || []).catch(() => []),
+          ]);
+          setSimValues({ em500, huawei, solis });
+          failures = 0;
+        } catch {
+          failures += 1;
+        }
+      }
+      timer = setTimeout(tick, failures >= 5 ? 5000 : 1000);
+    };
+
+    timer = setTimeout(tick, 1000);
     return () => {
       cancelled = true;
       clearTimeout(timer);
@@ -241,23 +263,33 @@ export function ZeroExportView({ devices, profiles, notify }) {
     return null;
   };
 
-  /** Prefer the polled LatestValue; fall back to the simulator's live value
-   *  (refreshes every ~1s) so external writes show up immediately. */
+  /** Compare both sources and return the freshest one (by sampledAt). The
+   *  simulator's live value (1s tick) wins over a stale polled LatestValue,
+   *  so external writes show up immediately. */
   const readingFor = (deviceId, key) => {
+    const candidates = [];
+
     const latest = latestByDevice[String(deviceId || "")]?.find(
       (value) => value.registerKey === key,
     );
     if (latest && latest.value !== null && latest.value !== undefined) {
-      return { ...latest, source: "poll" };
+      candidates.push({ ...latest, source: "poll" });
     }
+
     const simKey = simKeyForDevice(deviceId);
     if (simKey) {
       const sim = (simValues[simKey] || []).find((value) => value.registerKey === key);
       if (sim && sim.value !== null && sim.value !== undefined) {
-        return { ...sim, source: "sim" };
+        candidates.push({ ...sim, source: "sim" });
       }
     }
-    return null;
+
+    if (candidates.length === 0) return null;
+    candidates.sort(
+      (a, b) =>
+        new Date(b.sampledAt || 0).getTime() - new Date(a.sampledAt || 0).getTime(),
+    );
+    return candidates[0];
   };
 
   const ageText = (reading) =>
