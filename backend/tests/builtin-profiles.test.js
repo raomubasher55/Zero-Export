@@ -205,7 +205,7 @@ test('built-in Solis profile covers the Modbus RTU map with wire-offset addresse
 
   // Wire address = document register - 1.
   assert.equal(byKey.get('grid_voltage_a').address, 3008, 'doc 3009 -> wire 3008');
-  assert.equal(byKey.get('grid_voltage_a').registerType, 'HOLDING_REGISTER', 'Solis registers are served as holding registers (FC03)');
+  assert.equal(byKey.get('grid_voltage_a').registerType, 'INPUT_REGISTER', 'Solis measurements are input registers (FC04)');
   assert.equal(byKey.get('grid_voltage_a').scaleFactor, 0.1);
   assert.equal(byKey.get('grid_frequency').address, 3017);
   assert.equal(byKey.get('grid_frequency').scaleFactor, 0.01);
