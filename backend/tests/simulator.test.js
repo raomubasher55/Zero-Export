@@ -68,6 +68,18 @@ test('EM500 simulator serves raw words that decode back with the EM500 profile',
   const energy = decodeRegister(EM500_BY_KEY.get('total_import_active_energy'), energyWords);
   assert.ok(energy.value > 12000, `energy counter plausible, got ${energy.value}`);
 
+  // Tariff control register 8448: reads 0 by default, accepts FC06 writes,
+  // and read-back reflects the written value.
+  assert.equal(vector.getHoldingRegister(8448, 1), 0, 'tariff starts off');
+  vector.setRegister(8448, 1, 1);
+  assert.equal(instance.model.tariff, 1, 'write updates the simulator model');
+  assert.equal(vector.getHoldingRegister(8448, 1), 1, 'tariff read-back is 1');
+  instance.tick();
+  assert.equal(instance.values.get('tariff_enable').value, 1, 'tick publishes tariff state');
+  vector.setRegister(8448, 0, 1);
+  instance.tick();
+  assert.equal(vector.getHoldingRegister(8448, 1), 0, 'tariff can be switched off');
+
   assert.throws(
     () => vector.getInputRegister(0x0002, 2),
     (error) => error.modbusErrorCode === 0x02,

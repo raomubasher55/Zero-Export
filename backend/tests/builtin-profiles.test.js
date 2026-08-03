@@ -22,17 +22,20 @@ test('built-in EM500 profile is valid and complete', () => {
   assert.equal(parsed.manufacturer, 'Eastron');
   assert.equal(parsed.model, 'EM500');
   assert.equal(parsed.isActive, true);
-  assert.equal(parsed.registers.length, 68);
+  assert.equal(parsed.registers.length, 69);
 
   const keys = new Set(parsed.registers.map((register) => register.key));
-  assert.equal(keys.size, 68, 'register keys must be unique');
+  assert.equal(keys.size, 69, 'register keys must be unique');
 
   const addresses = new Set(
     parsed.registers.map((register) => `${register.registerType}:${register.address}`),
   );
-  assert.equal(addresses.size, 68, 'register addresses must be unique');
+  assert.equal(addresses.size, 69, 'register addresses must be unique');
 
-  for (const register of parsed.registers) {
+  const inputRegisters = parsed.registers.filter(
+    (register) => register.registerType === 'INPUT_REGISTER',
+  );
+  for (const register of inputRegisters) {
     assert.equal(register.registerType, 'INPUT_REGISTER', `${register.key} must be an input register`);
     assert.equal(register.writable, false, `${register.key} must be read-only`);
     assert.equal(register.bitIndex, 0);
@@ -40,6 +43,16 @@ test('built-in EM500 profile is valid and complete', () => {
     assert.equal(register.length, register.dataType === REGISTER_DATA_TYPES.UINT64 ? 4 : 2);
     assert.ok(register.address + register.length <= 65536);
   }
+
+  const tariff = parsed.registers.find((register) => register.key === 'tariff_enable');
+  assert.ok(tariff, 'tariff register must exist');
+  assert.equal(tariff.address, 8448, 'tariff register is decimal 8448 (0x2100)');
+  assert.equal(tariff.registerType, 'HOLDING_REGISTER', 'tariff is a holding register');
+  assert.equal(tariff.dataType, 'UINT16');
+  assert.equal(tariff.length, 1);
+  assert.equal(tariff.writable, true, 'tariff must be writable');
+  assert.equal(tariff.enabled, true, 'tariff must be enabled');
+  assert.equal(tariff.scaleFactor, 1);
 });
 
 test('EM500 profile polls only the real-time area by default (energy counters disabled)', () => {
@@ -61,12 +74,24 @@ test('EM500 profile polls only the real-time area by default (energy counters di
     'energy counters must ship disabled so polls stay within the real-time area',
   );
 
-  const maxEnabled = Math.max(
+  const maxEnabledInput = Math.max(
     ...EM500_PROFILE.registers
-      .filter((register) => register.enabled)
+      .filter((register) => register.enabled && register.registerType === 'INPUT_REGISTER')
       .map((register) => register.address + register.length),
   );
-  assert.ok(maxEnabled <= 0x0048 + 2, 'enabled registers must stay in the 0x0000-0x0048 real-time area');
+  assert.ok(
+    maxEnabledInput <= 0x0048 + 2,
+    'enabled input registers must stay in the 0x0000-0x0048 real-time area',
+  );
+
+  // The only enabled non-input register is the tariff holding register.
+  const enabledControl = EM500_PROFILE.registers.filter(
+    (register) => register.enabled && register.registerType === 'HOLDING_REGISTER',
+  );
+  assert.deepEqual(
+    enabledControl.map((register) => register.key),
+    ['tariff_enable'],
+  );
 });
 
 test('EM500 measurement registers use 2-word signed/unsigned longs with manual scaling', () => {

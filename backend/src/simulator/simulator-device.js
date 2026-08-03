@@ -176,6 +176,7 @@ class SimulatorDevice {
     }
     // EM500 meter
     return {
+      tariff: 0, // register 8448 (0x2100): 0 = tariff off, 1 = tariff on
       phase: {
         voltage: [232.4, 231.1, 230.2],
         current: [45.3, 48.7, 42.9],
@@ -387,6 +388,9 @@ class SimulatorDevice {
     if (definition.key === 'remote_power_control_enable') {
       this.model.remoteControl = Math.round(decoded.value);
     }
+    if (definition.key === 'tariff_enable') {
+      this.model.tariff = Math.round(decoded.value) ? 1 : 0;
+    }
     if (definition.key === 'reactive_power_pf_command') {
       this.model.pfCommand = decoded.value;
     }
@@ -592,6 +596,7 @@ class SimulatorDevice {
       phase_phase_voltage_asymmetry: 1.5,
       phase_neutral_voltage_asymmetry: 1.1,
       current_asymmetry: 2.2,
+      tariff_enable: model.tariff,
       total_import_active_energy: e.totalImportActive,
       total_export_active_energy: e.totalExportActive,
       total_import_reactive_energy: e.totalImportReactive,

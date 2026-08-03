@@ -135,6 +135,11 @@ repository/model, route, and validation boundaries.
   the real-time area (addresses `0x0002`–`0x0048`) because many EM500 units
   reject reads above it. Enable the counters per site once the meter confirms
   those addresses respond.
+- The **tariff control register** (decimal `8448` / `0x2100`) is included as
+  a writable holding register (`tariff_enable`, UINT16, 0 = tariff off,
+  1 = tariff on). The simulator serves and accepts writes on it, and the
+  simulator page has a **Tariff** switch that writes it like an external
+  master.
 - Built-in profiles are versioned (`metadata.profileVersion`); a stale
   built-in profile is upgraded to the shipped definition at startup, while
   operator-created profiles and current-version built-ins are never touched.

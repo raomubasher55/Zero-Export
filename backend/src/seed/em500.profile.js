@@ -14,6 +14,9 @@
  * Byte/word order defaults to big-endian (ABCD), which is the common
  * Eastron/Modbus default; adjust per register if a site meter reports a
  * different order.
+ *
+ * The tariff control register (8448 / 0x2100) is a writable holding
+ * register (FC06/FC16): 0 = tariff off, 1 = tariff on.
  */
 
 const { REGISTER_DATA_TYPES } = require('../constants/modbus');
@@ -40,8 +43,30 @@ function register({ hexAddress, key, name, dataType, scaleFactor, unit, group })
   };
 }
 
+function controlRegister({ address, key, name, unit, group }) {
+  return {
+    key,
+    name,
+    registerType: 'HOLDING_REGISTER',
+    address,
+    dataType: 'UINT16',
+    length: 1,
+    byteOrder: 'BIG_ENDIAN',
+    wordOrder: 'BIG_ENDIAN',
+    bitIndex: 0,
+    scaleFactor: 1,
+    offset: 0,
+    unit: unit || undefined,
+    group,
+    writable: true,
+    enabled: true,
+    sortOrder: 0,
+  };
+}
+
 const MEASUREMENTS = 'Measurements';
 const ENERGY = 'Energy';
+const CONTROL = 'Control';
 
 const registers = [
   // --- Table 1: instantaneous measurements (2 words each) ---
@@ -115,13 +140,17 @@ const registers = [
   register({ hexAddress: '1E6C', key: 'l2_partial_apparent_energy', name: 'L2 partial apparent energy', dataType: REGISTER_DATA_TYPES.UINT64, scaleFactor: 0.01, unit: 'kVAh', group: ENERGY }),
   register({ hexAddress: '1E70', key: 'l3_import_active_energy', name: 'L3 imported active energy', dataType: REGISTER_DATA_TYPES.UINT64, scaleFactor: 0.01, unit: 'kWh', group: ENERGY }),
   register({ hexAddress: '1E94', key: 'l3_partial_apparent_energy', name: 'L3 partial apparent energy', dataType: REGISTER_DATA_TYPES.UINT64, scaleFactor: 0.01, unit: 'kVAh', group: ENERGY }),
+
+  // --- Control (writable holding register, FC06/FC16) ---
+  // 8448 (0x2100): tariff selection. 0 = tariff off, 1 = tariff on.
+  controlRegister({ address: 8448, key: 'tariff_enable', name: 'Tariff enable', unit: null, group: CONTROL }),
 ];
 
 const EM500_PROFILE = Object.freeze({
   identifier: 'em500',
   name: 'Eastron EM500 energy meter',
   description:
-    'Built-in Eastron EM500 register map: instantaneous phase measurements (2-word) and energy counters (4-word 64-bit), input registers, scaling per the EM500 register data manual. Energy counters ship disabled because many EM500 units reject reads above the real-time area; enable them per site once the meter confirms those addresses.',
+    'Built-in Eastron EM500 register map: instantaneous phase measurements (2-word) and energy counters (4-word 64-bit), input registers, scaling per the EM500 register data manual. Energy counters ship disabled because many EM500 units reject reads above the real-time area; enable them per site once the meter confirms those addresses. Tariff enable (8448/0x2100) is a writable holding register: 0 = off, 1 = on.',
   manufacturer: 'Eastron',
   model: 'EM500',
   registers: Object.freeze(
@@ -132,9 +161,9 @@ const EM500_PROFILE = Object.freeze({
   isActive: true,
   tags: Object.freeze(['em500', 'meter', 'built-in']),
   metadata: Object.freeze({
-    profileVersion: 2,
+    profileVersion: 3,
     notes:
-      'Version 2: real-time parameters only (addresses 0x0002-0x0048); energy counters present but disabled until verified on site.',
+      'Version 3: adds the tariff control register at 8448 (0x2100), a writable holding register with 0 = tariff off, 1 = tariff on.',
   }),
 });
 

@@ -294,6 +294,38 @@ export function SimulatorView({ devices, profiles, notify, onForwardProfile }) {
     }
   };
 
+  /** Toggle the EM500 tariff register (8448): 0 = off, 1 = on. */
+  const setTariff = async (enabled) => {
+    const deviceRef = simulatorDevices.em500;
+    if (!deviceRef) {
+      notify("Create the EM500 simulator device first.", "error");
+      return;
+    }
+    setWorking("em500");
+    try {
+      await api.rawWrite(deviceRef._id, {
+        registerType: "HOLDING_REGISTER",
+        address: 8448,
+        values: [enabled ? 1 : 0],
+      });
+      notify(
+        `Tariff ${enabled ? "ON" : "OFF"} (register 8448 = ${enabled ? 1 : 0}).`,
+      );
+    } catch (writeError) {
+      notify(
+        writeError?.message || "Unable to write the tariff register.",
+        "error",
+      );
+    } finally {
+      setWorking("");
+    }
+  };
+
+  // Live tariff state from the simulator values (register 8448 read-back).
+  const tariffValue = values.em500?.find(
+    (value) => value.registerKey === "tariff_enable",
+  )?.value;
+
   return (
     <div className="space-y-6">
       <section className="flex flex-col justify-between gap-4 xl:flex-row xl:items-end">
@@ -447,6 +479,24 @@ export function SimulatorView({ devices, profiles, notify, onForwardProfile }) {
                     />
                   </Field>
                 </div>
+
+                {key === "em500" && (
+                  <div className="flex flex-wrap items-end gap-2 rounded-lg border border-slate-100 bg-slate-50 p-3">
+                    <div className="min-w-[220px] flex-1">
+                      <SwitchRow
+                        label="Tariff"
+                        description="Register 8448 (0x2100): ON = 1, OFF = 0"
+                        checked={Number(tariffValue) === 1}
+                        onCheckedChange={setTariff}
+                      />
+                    </div>
+                    <p className="w-full text-[11px] text-slate-500">
+                      Writes the tariff selection like an external master (FC06,
+                      holding register 8448). Live state comes from the polled
+                      read-back.
+                    </p>
+                  </div>
+                )}
 
                 {key === "huawei" && (
                   <div className="flex flex-wrap items-end gap-2 rounded-lg border border-slate-100 bg-slate-50 p-3">
