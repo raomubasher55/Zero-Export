@@ -475,9 +475,11 @@ export function SimulatorView({ devices, profiles, notify, onForwardProfile }) {
             Device simulators
           </h2>
           <p className="mt-2 max-w-3xl text-sm text-slate-500">
-            Process-local Modbus TCP slaves for an EM500 grid meter and a
-            Huawei SUN2000 inverter. Set each device's own unit ID and port,
-            then poll, forward, or control them exactly like real hardware.
+            Process-local Modbus TCP slaves for an EM500 grid meter, a Huawei
+            SUN2000 inverter, and a Solis inverter. Each device answers only
+            for its own unit ID; devices with the same port share one server
+            (like an RS485 bus over TCP). Set unit IDs and ports freely, then
+            poll, forward, or control them like real hardware.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">

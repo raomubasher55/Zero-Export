@@ -247,6 +247,22 @@ class SimulatorDevice {
     return this.getStatus();
   }
 
+  /** Begin the value-generation loop (tick once, then every interval). */
+  startTicking() {
+    this.tick();
+    this.tickTimer = setInterval(() => {
+      try {
+        this.tick();
+      } catch (error) {
+        this.logger.error('Simulator device tick failed', {
+          device: this.key,
+          error: error.stack || error.message,
+        });
+      }
+    }, this.configuration.updateIntervalMs);
+    this.tickTimer.unref?.();
+  }
+
   async start() {
     if (this.state === SIMULATOR_STATES.RUNNING || this.state === SIMULATOR_STATES.STARTING) {
       return this.getStatus();
@@ -261,18 +277,7 @@ class SimulatorDevice {
       this.model.startedAt = this.startedAt;
       this.lastError = null;
 
-      this.tick();
-      this.tickTimer = setInterval(() => {
-        try {
-          this.tick();
-        } catch (error) {
-          this.logger.error('Simulator device tick failed', {
-            device: this.key,
-            error: error.stack || error.message,
-          });
-        }
-      }, this.configuration.updateIntervalMs);
-      this.tickTimer.unref?.();
+      this.startTicking();
 
       this.logger.info('Simulator device started', {
         device: this.key,
@@ -291,13 +296,40 @@ class SimulatorDevice {
     }
   }
 
+  /**
+   * Attach to a farm-managed shared server instead of owning one. The shared
+   * server dispatches requests by unit ID, so several devices can share one
+   * TCP port (like an RS485 bus bridged over TCP).
+   */
+  attachSharedServer(server) {
+    if (this.state === SIMULATOR_STATES.RUNNING || this.state === SIMULATOR_STATES.STARTING) {
+      return this.getStatus();
+    }
+    this.sharedServer = server;
+    this.server = server;
+    this.state = SIMULATOR_STATES.RUNNING;
+    this.startedAt = new Date();
+    this.model.startedAt = this.startedAt;
+    this.lastError = null;
+    this.startTicking();
+    this.logger.info('Simulator device attached to shared server', {
+      device: this.key,
+      host: this.configuration.host,
+      port: this.configuration.port,
+      unitId: this.configuration.unitId,
+    });
+    return this.getStatus();
+  }
+
   async stop() {
     if (this.tickTimer) {
       clearInterval(this.tickTimer);
       this.tickTimer = null;
     }
-    const server = this.server;
+    // Shared servers are owned by the farm; only close self-owned servers.
+    const server = this.sharedServer ? null : this.server;
     this.server = null;
+    this.sharedServer = null;
     await closeServer(server);
     this.state = SIMULATOR_STATES.STOPPED;
     this.startedAt = null;
@@ -937,4 +969,5 @@ class SimulatorDevice {
 module.exports = {
   SIMULATOR_STATES,
   SimulatorDevice,
+  waitForServer,
 };
