@@ -32,15 +32,22 @@ test('built-in EM500 profile is valid and complete', () => {
   );
   assert.equal(addresses.size, 69, 'register addresses must be unique');
 
-  const inputRegisters = parsed.registers.filter(
-    (register) => register.registerType === 'INPUT_REGISTER',
+  const holdingRegisters = parsed.registers.filter(
+    (register) => register.registerType === 'HOLDING_REGISTER',
   );
-  for (const register of inputRegisters) {
-    assert.equal(register.registerType, 'INPUT_REGISTER', `${register.key} must be an input register`);
-    assert.equal(register.writable, false, `${register.key} must be read-only`);
+  assert.equal(holdingRegisters.length, 69, 'all EM500 registers are holding registers (FC03)');
+
+  for (const register of holdingRegisters) {
+    assert.equal(register.registerType, 'HOLDING_REGISTER', `${register.key} must be a holding register`);
     assert.equal(register.bitIndex, 0);
     assert.equal(register.offset, 0);
-    assert.equal(register.length, register.dataType === REGISTER_DATA_TYPES.UINT64 ? 4 : 2);
+    const expectedLength =
+      register.dataType === REGISTER_DATA_TYPES.UINT64
+        ? 4
+        : register.dataType === REGISTER_DATA_TYPES.UINT16 && register.key === 'tariff_enable'
+          ? 1
+          : 2;
+    assert.equal(register.length, expectedLength);
     assert.ok(register.address + register.length <= 65536);
   }
 
@@ -74,23 +81,23 @@ test('EM500 profile polls only the real-time area by default (energy counters di
     'energy counters must ship disabled so polls stay within the real-time area',
   );
 
-  const maxEnabledInput = Math.max(
-    ...EM500_PROFILE.registers
-      .filter((register) => register.enabled && register.registerType === 'INPUT_REGISTER')
-      .map((register) => register.address + register.length),
+  // Enabled registers stay in the real-time area, except the tariff control
+  // register at 8448.
+  const enabledRealtime = EM500_PROFILE.registers.filter(
+    (register) => register.enabled && register.key !== 'tariff_enable',
+  );
+  const maxEnabled = Math.max(
+    ...enabledRealtime.map((register) => register.address + register.length),
   );
   assert.ok(
-    maxEnabledInput <= 0x0048 + 2,
-    'enabled input registers must stay in the 0x0000-0x0048 real-time area',
+    maxEnabled <= 0x0048 + 2,
+    'enabled registers must stay in the 0x0000-0x0048 real-time area',
   );
-
-  // The only enabled non-input register is the tariff holding register.
-  const enabledControl = EM500_PROFILE.registers.filter(
-    (register) => register.enabled && register.registerType === 'HOLDING_REGISTER',
-  );
-  assert.deepEqual(
-    enabledControl.map((register) => register.key),
-    ['tariff_enable'],
+  assert.ok(
+    EM500_PROFILE.registers.every(
+      (register) => register.registerType === 'HOLDING_REGISTER',
+    ),
+    'every EM500 register is a holding register (FC03)',
   );
 });
 

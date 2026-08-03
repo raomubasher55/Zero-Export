@@ -6,8 +6,9 @@
  * Source: EM500 register data manual — table 1 (instantaneous measurements,
  * 2-word values) and table 2 (energy counters, 4-word 64-bit values).
  *
- * All entries are Modbus input registers (FC04 reads). Addresses are the
- * zero-based input-register addresses from the manual's hex column.
+ * All entries are Modbus holding registers (FC03 reads), matching the site's
+ * FC03 wiring. Addresses are the zero-based register addresses from the
+ * manual's hex column.
  * scaleFactor follows the manual's UNIT column (e.g. V/100 -> 0.01,
  * A/10000 -> 0.0001, Hz/1000 -> 0.001).
  *
@@ -26,7 +27,7 @@ function register({ hexAddress, key, name, dataType, scaleFactor, unit, group })
   return {
     key,
     name,
-    registerType: 'INPUT_REGISTER',
+    registerType: 'HOLDING_REGISTER',
     address: Number.parseInt(hexAddress, 16),
     dataType,
     length: expectedWordLength(dataType),
@@ -150,7 +151,7 @@ const EM500_PROFILE = Object.freeze({
   identifier: 'em500',
   name: 'Eastron EM500 energy meter',
   description:
-    'Built-in Eastron EM500 register map: instantaneous phase measurements (2-word) and energy counters (4-word 64-bit), input registers, scaling per the EM500 register data manual. Energy counters ship disabled because many EM500 units reject reads above the real-time area; enable them per site once the meter confirms those addresses. Tariff enable (8448/0x2100) is a writable holding register: 0 = off, 1 = on.',
+    'Built-in Eastron EM500 register map: instantaneous phase measurements (2-word) and energy counters (4-word 64-bit), holding registers read with FC03, scaling per the EM500 register data manual. Energy counters ship disabled because many EM500 units reject reads above the real-time area; enable them per site once the meter confirms those addresses. Tariff enable (8448/0x2100) is a writable holding register: 0 = off, 1 = on.',
   manufacturer: 'Eastron',
   model: 'EM500',
   registers: Object.freeze(
@@ -161,9 +162,9 @@ const EM500_PROFILE = Object.freeze({
   isActive: true,
   tags: Object.freeze(['em500', 'meter', 'built-in']),
   metadata: Object.freeze({
-    profileVersion: 3,
+    profileVersion: 4,
     notes:
-      'Version 3: adds the tariff control register at 8448 (0x2100), a writable holding register with 0 = tariff off, 1 = tariff on.',
+      'Version 4: all registers served as holding registers (FC03) instead of input registers (FC04).',
   }),
 });
 

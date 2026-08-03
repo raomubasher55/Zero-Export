@@ -128,8 +128,9 @@ repository/model, route, and validation boundaries.
   `em500` identifier is missing. Existing profiles are never overwritten; set
   `SEED_BUILTIN_PROFILES=false` to disable seeding entirely.
 - The profile mirrors the EM500 register data manual: 33 instantaneous
-  measurements (2-word `UINT32`/`INT32`, input registers) and 35 energy
-  counters (4-word 64-bit values), all with the manual's scaling
+  measurements (2-word `UINT32`/`INT32`) and 35 energy counters (4-word
+  64-bit values), all served as **holding registers (FC03)** per the site's
+  wiring, with the manual's scaling
   (V/100, A/10000, W/100, var/100, VA/100, Hz/1000, PF/10000, %/100,
   kWh/kvarh/kVAh per 100). **Energy counters ship disabled**: polls read only
   the real-time area (addresses `0x0002`–`0x0048`) because many EM500 units

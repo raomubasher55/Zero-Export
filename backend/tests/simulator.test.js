@@ -60,11 +60,11 @@ test('EM500 simulator serves raw words that decode back with the EM500 profile',
   await instance.start();
 
   const vector = instance.createVector();
-  const voltageWords = vector.getMultipleInputRegisters(0x0002, 2, 1);
+  const voltageWords = vector.getMultipleHoldingRegisters(0x0002, 2, 1);
   const voltage = decodeRegister(EM500_BY_KEY.get('l1_phase_voltage'), voltageWords);
   assert.ok(voltage.value > 225 && voltage.value < 245, `voltage in range, got ${voltage.value}`);
 
-  const energyWords = vector.getMultipleInputRegisters(0x1b20, 4, 1);
+  const energyWords = vector.getMultipleHoldingRegisters(0x1b20, 4, 1);
   const energy = decodeRegister(EM500_BY_KEY.get('total_import_active_energy'), energyWords);
   assert.ok(energy.value > 12000, `energy counter plausible, got ${energy.value}`);
 
@@ -85,16 +85,17 @@ test('EM500 simulator serves raw words that decode back with the EM500 profile',
     (error) => error.modbusErrorCode === 0x02,
     'unexpected unit IDs still raise an exception',
   );
-  // Gap/reserved addresses read as 0 instead of raising exception 02.
-  assert.equal(vector.getHoldingRegister(0x0002, 1), 0, 'EM500 holding gap reads as 0');
-  assert.equal(vector.getInputRegister(0xffff, 1), 0, 'unmapped address reads as 0');
+  // All EM500 registers are holding registers (FC03) now; input-area reads
+  // return 0 and holding gaps read as 0 instead of raising exception 02.
+  assert.equal(vector.getInputRegister(0x0002, 1), 0, 'EM500 input-area read returns 0 (FC04 not served)');
+  assert.equal(vector.getHoldingRegister(0xffff, 1), 0, 'unmapped holding address reads as 0');
 
   await instance.stop();
 
   // Disabling zero-fill restores the strict exception behavior.
   instance.configure({ options: { zeroFillGaps: false } });
   assert.throws(
-    () => vector.getHoldingRegister(0x0002, 1),
+    () => vector.getHoldingRegister(0xffff, 1),
     (error) => error.modbusErrorCode === 0x02,
   );
 });
