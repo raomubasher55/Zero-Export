@@ -67,7 +67,7 @@ export function SimulatorView({ devices, profiles, notify, onForwardProfile }) {
       ]),
     ),
   );
-  const [values, setValues] = useState({ em500: [], huawei: [] });
+  const [values, setValues] = useState({ em500: [], huawei: [], solis: [] });
   const [working, setWorking] = useState("");
   const [error, setError] = useState("");
   const [deratingPct, setDeratingPct] = useState("100");
@@ -385,8 +385,9 @@ export function SimulatorView({ devices, profiles, notify, onForwardProfile }) {
     }
   };
 
+  const deviceValues = (key) => values[key] || [];
   const liveDeratingValue = activeTarget
-    ? values[activeTarget.key]?.find(
+    ? deviceValues(activeTarget.key).find(
         (value) => value.registerKey === activeTarget.register.key,
       )?.value
     : null;
@@ -740,7 +741,7 @@ export function SimulatorView({ devices, profiles, notify, onForwardProfile }) {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <FlaskConical className="h-4 w-4" /> {DEVICE_DEFAULTS[key].label} values
-              <Badge variant="outline">{values[key].length}</Badge>
+              <Badge variant="outline">{deviceValues(key).length}</Badge>
             </CardTitle>
             <CardDescription>
               Live snapshot served by the {DEVICE_DEFAULTS[key].label} simulator;
@@ -748,7 +749,7 @@ export function SimulatorView({ devices, profiles, notify, onForwardProfile }) {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {values[key].length === 0 ? (
+            {deviceValues(key).length === 0 ? (
               <EmptyState
                 title="No values yet"
                 description="Start this simulator device to generate values."
@@ -765,7 +766,7 @@ export function SimulatorView({ devices, profiles, notify, onForwardProfile }) {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {values[key].map((value) => (
+                    {deviceValues(key).map((value) => (
                       <tr key={value.registerKey}>
                         <td className="px-3 py-1.5">
                           <span className="font-medium">{value.registerName}</span>
