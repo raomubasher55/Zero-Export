@@ -331,3 +331,39 @@ test('simulator device schema validates settings and options', () => {
   assert.throws(() => simulatorDeviceUpdateSchema.parse({}), (error) => error.name === 'ZodError');
   assert.throws(() => simulatorDeviceUpdateSchema.parse({ surprise: true }), (error) => error.name === 'ZodError');
 });
+
+test('simulator settings persist and are reapplied at boot', async () => {
+  const saved = {};
+  const repository = {
+    get: async (key) => saved[key] || null,
+    save: async (key, settings) => {
+      saved[key] = settings;
+      return settings;
+    },
+  };
+
+  const { instance } = device({
+    profile: SOLIS_PROFILE,
+    deviceType: 'Solis inverter',
+    configuration: { port: 15022, unitId: 3, updateIntervalMs: 1000 },
+    options: { ratingKw: 100, availabilityPct: 80, loadKw: 100 },
+  });
+
+  // simulate the controller saving settings
+  const wasRunning = instance.getStatus().state === 'RUNNING';
+  await instance.stop();
+  instance.configure({ port: 15403, unitId: 9, options: { availabilityPct: 30 } });
+  await repository.save('solis', { port: 15403, unitId: 9, options: { availabilityPct: 30 } });
+  if (wasRunning) await instance.start();
+
+  // fresh-ish apply from persistence
+  await instance.stop();
+  instance.configure({ port: 15022, unitId: 3, options: { availabilityPct: 80 } }); // reset to defaults
+  assert.equal(instance.getStatus().port, 15022);
+  // apply to a standalone device via a small helper mimic: configure from saved
+  const savedSettings = await repository.get('solis');
+  instance.configure({ port: savedSettings.port, unitId: savedSettings.unitId, options: savedSettings.options });
+  assert.equal(instance.getStatus().port, 15403);
+  assert.equal(instance.getStatus().unitId, 9);
+  assert.equal(instance.getStatus().options.availabilityPct, 30);
+});

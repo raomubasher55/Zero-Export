@@ -65,6 +65,27 @@ function getDevice(key) {
   return simulatorDevices[key] || null;
 }
 
+/** Apply persisted settings (port, unit ID, options) to every device. */
+async function applyPersistedSettings(settingsRepository) {
+  const results = [];
+  for (const key of Object.keys(simulatorDevices)) {
+    try {
+      const saved = await settingsRepository.get(key);
+      if (saved) {
+        const { key: ignoredKey, createdAt, updatedAt, _id, ...settings } = saved;
+        void ignoredKey; void createdAt; void updatedAt; void _id;
+        simulatorDevices[key].configure(settings);
+        results.push({ key, applied: true });
+      } else {
+        results.push({ key, applied: false });
+      }
+    } catch (error) {
+      results.push({ key, applied: false, error: error.message });
+    }
+  }
+  return results;
+}
+
 function getStatus() {
   const devices = {};
   for (const [key, device] of Object.entries(simulatorDevices)) {
@@ -93,6 +114,7 @@ async function stopAll() {
 }
 
 module.exports = {
+  applyPersistedSettings,
   getDevice,
   getStatus,
   getValues,
