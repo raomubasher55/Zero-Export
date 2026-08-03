@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ErrorBanner, EmptyState, KeyValue } from "@/components/common/Feedback";
-import { Field, SwitchRow } from "@/components/common/FormControls";
+import { Field, Select, SwitchRow } from "@/components/common/FormControls";
 import { api } from "@/lib/api";
 import { formatValue } from "@/lib/formatters";
 
