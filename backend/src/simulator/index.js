@@ -3,13 +3,14 @@
 const { SimulatorDevice } = require('./simulator-device');
 const { EM500_PROFILE } = require('../seed/em500.profile');
 const { HUAWEI_SUN2000_PROFILE } = require('../seed/huawei-sun2000.profile');
+const { SOLIS_PROFILE } = require('../seed/solis-inverter.profile');
 
 /**
  * Simulator farm: one Modbus TCP slave per device type.
  *
  * Each device runs on its own TCP port and answers only for its configured
- * unit ID, so a site can be tested with an EM500 grid meter and a Huawei
- * SUN2000 inverter side by side.
+ * unit ID, so a site can be tested with an EM500 grid meter, a Huawei
+ * SUN2000 inverter, and a Solis inverter side by side.
  */
 const simulatorDevices = Object.freeze({
   em500: new SimulatorDevice({
@@ -42,6 +43,22 @@ const simulatorDevices = Object.freeze({
       },
     },
   }),
+  solis: new SimulatorDevice({
+    key: 'solis',
+    deviceType: 'Solis inverter',
+    profile: SOLIS_PROFILE,
+    defaultConfiguration: {
+      host: '0.0.0.0',
+      port: 15022,
+      unitId: 3,
+      updateIntervalMs: 1000,
+      options: {
+        ratingKw: 100,
+        availabilityPct: 80,
+        loadKw: 100,
+      },
+    },
+  }),
 });
 
 function getDevice(key) {
@@ -62,9 +79,10 @@ function getValues(key) {
 }
 
 async function startAll() {
-  // Start the inverter first so the coupled meter sees it running on its
+  // Start the inverters first so the coupled meter sees them running on its
   // initial tick and reports grid = load - inverter from the first second.
   await simulatorDevices.huawei.start();
+  await simulatorDevices.solis.start();
   await simulatorDevices.em500.start();
   return getStatus();
 }

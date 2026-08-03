@@ -192,6 +192,26 @@ repository/model, route, and validation boundaries.
   simulated meter flows through the exact poll → forward → downstream path as
   a real meter.
 
+### Step 11 — Solis inverter profile and simulator
+
+- A built-in **Solis (Ginlong) inverter** register profile ships with the
+  backend (`backend/src/seed/solis-inverter.profile.js`): the Modbus RTU map
+  with **wire address = document register − 1** — grid voltages/currents/
+  frequency, active/apparent/reactive power (W/VA/VAr), power factor, daily/
+  monthly/yesterday generation, inverter status and fault codes, external
+  meter grid power (3205, signed import/export), 15 MPPT channels and 32 DC
+  string channels (FC04 input registers), and the writable **active power
+  limit** holding register (3050, 0–10000 = 0–1000.0% in 0.1% steps,
+  FC03/FC06/FC16). `maxReadQuantity: 50` matches the protocol's 100-byte
+  frame recommendation.
+- The simulator farm gains a **Solis inverter** (port `15022`, unit 3) with
+  solar rating/availability, a derating model driven by the 3050 limit, an
+  external-meter view coupled to the site load, and full FC04 value
+  generation (verified over real TCP: limit 10000→5000 drops output 80→41 kW
+  with read-back). The EM500 grid meter now couples to **both** inverters
+  (grid = load − huawei − solis), so multi-inverter zero-export scenarios can
+  be tested end-to-end.
+
 ### Step 10 — Huawei inverter profile, dual-device simulator, and zero-export control
 
 - A built-in **Huawei SUN2000** register profile ships with the backend

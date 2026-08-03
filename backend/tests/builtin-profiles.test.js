@@ -6,6 +6,7 @@ const { REGISTER_DATA_TYPES } = require('../src/constants/modbus');
 const { createRegisterProfileBodySchema } = require('../src/validators/register-profile.validator');
 const { EM500_PROFILE } = require('../src/seed/em500.profile');
 const { HUAWEI_SUN2000_PROFILE } = require('../src/seed/huawei-sun2000.profile');
+const { SOLIS_PROFILE } = require('../src/seed/solis-inverter.profile');
 const {
   BUILTIN_PROFILES,
   seedBuiltinProfiles,
@@ -190,6 +191,56 @@ test('built-in Huawei profile covers the full V3.0 map with a 15-register read l
   }
 });
 
+test('built-in Solis profile covers the Modbus RTU map with wire-offset addresses', () => {
+  const parsed = createRegisterProfileBodySchema.parse(SOLIS_PROFILE);
+
+  assert.equal(parsed.identifier, 'solis-inverter');
+  assert.equal(parsed.maxReadQuantity, 50);
+  assert.equal(parsed.registers.length, 117);
+
+  const keys = new Set(parsed.registers.map((register) => register.key));
+  assert.equal(keys.size, 117, 'register keys must be unique');
+
+  const byKey = new Map(parsed.registers.map((register) => [register.key, register]));
+
+  // Wire address = document register - 1.
+  assert.equal(byKey.get('grid_voltage_a').address, 3008, 'doc 3009 -> wire 3008');
+  assert.equal(byKey.get('grid_voltage_a').registerType, 'INPUT_REGISTER');
+  assert.equal(byKey.get('grid_voltage_a').scaleFactor, 0.1);
+  assert.equal(byKey.get('grid_frequency').address, 3017);
+  assert.equal(byKey.get('grid_frequency').scaleFactor, 0.01);
+  assert.equal(byKey.get('active_power').address, 3003);
+  assert.equal(byKey.get('active_power').dataType, 'UINT32');
+  assert.equal(byKey.get('reactive_power').address, 3005, 'moved off 0x0BBC to avoid overlap');
+  assert.equal(byKey.get('power_factor').scaleFactor, 0.001);
+  assert.equal(byKey.get('daily_generation').address, 3014);
+  assert.equal(byKey.get('daily_generation').scaleFactor, 0.1);
+  assert.equal(byKey.get('meter_grid_active_power').address, 3205);
+  assert.equal(byKey.get('meter_grid_active_power').dataType, 'INT32');
+  assert.equal(byKey.get('mppt1_voltage').address, 3500);
+  assert.equal(byKey.get('mppt15_voltage').address, 3514);
+  assert.equal(byKey.get('mppt1_current').address, 3530);
+  assert.equal(byKey.get('mppt15_current').address, 3544);
+  assert.equal(byKey.get('string1_voltage').address, 3022);
+  assert.equal(byKey.get('string1_current').address, 3023);
+  assert.equal(byKey.get('string32_voltage').address, 3084);
+  assert.equal(byKey.get('string32_current').address, 3085);
+
+  const limit = byKey.get('active_power_limit');
+  assert.equal(limit.address, 3050, 'doc 3051 -> wire 3050');
+  assert.equal(limit.registerType, 'HOLDING_REGISTER', 'power limit is a holding register');
+  assert.equal(limit.writable, true);
+  assert.equal(limit.dataType, 'UINT16');
+  assert.equal(limit.scaleFactor, 0.1);
+
+  for (const register of parsed.registers) {
+    assert.ok(register.address + register.length <= 65536);
+    if (register.dataType === 'UINT32' || register.dataType === 'INT32') {
+      assert.equal(register.length, 2);
+    }
+  }
+});
+
 test('built-in profile seed creates missing profiles and never overwrites existing ones', async () => {
   const created = [];
   const repository = {
@@ -231,7 +282,7 @@ test('built-in profile seed skips identifiers that already exist at the current 
   const results = await seedBuiltinProfiles(repository);
   assert.deepEqual(
     results.map((result) => result.action),
-    ['SKIPPED', 'SKIPPED'],
+    ['SKIPPED', 'SKIPPED', 'SKIPPED'],
   );
 });
 
@@ -254,10 +305,11 @@ test('built-in profile seed upgrades stale built-in profiles to the shipped vers
   };
 
   const results = await seedBuiltinProfiles(repository);
-  // Both profiles ship at version 2, so stale version-1 built-ins upgrade.
+  // EM500 (v4) and Huawei (v3) upgrade from version 1; Solis ships at
+  // version 1, so it stays as-is.
   assert.deepEqual(
     results.map((result) => result.action),
-    ['UPDATED', 'UPDATED'],
+    ['UPDATED', 'UPDATED', 'SKIPPED'],
   );
 
   const em500Upgrade = updated.find((profile) => profile.identifier === 'em500');
@@ -288,7 +340,7 @@ test('built-in profile seed never touches operator-created profiles', async () =
   const results = await seedBuiltinProfiles(repository);
   assert.deepEqual(
     results.map((result) => result.action),
-    ['SKIPPED', 'SKIPPED'],
+    ['SKIPPED', 'SKIPPED', 'SKIPPED'],
   );
 });
 
@@ -306,9 +358,9 @@ test('RegisterProfileService.restoreBuiltIns recreates deleted built-in profiles
   });
 
   const result = await service.restoreBuiltIns();
-  assert.deepEqual(result.restored, ['em500', 'huawei-sun2000']);
+  assert.deepEqual(result.restored, ['em500', 'huawei-sun2000', 'solis-inverter']);
   assert.deepEqual(result.alreadyPresent, []);
-  assert.equal(result.total, 2);
+  assert.equal(result.total, 3);
   assert.ok(created.every((profile) => profile.builtIn === true));
 });
 
@@ -336,11 +388,11 @@ test('RegisterProfileService.restoreBuiltIns reports profiles that already exist
   });
 
   const result = await service.restoreBuiltIns();
-  assert.deepEqual(result.restored, ['huawei-sun2000']);
+  assert.deepEqual(result.restored, ['huawei-sun2000', 'solis-inverter']);
   assert.deepEqual(result.alreadyPresent, ['em500']);
-  assert.equal(result.total, 2);
+  assert.equal(result.total, 3);
   assert.deepEqual(
     created.map((profile) => profile.identifier),
-    ['huawei-sun2000'],
+    ['huawei-sun2000', 'solis-inverter'],
   );
 });

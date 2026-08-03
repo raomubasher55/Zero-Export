@@ -149,6 +149,21 @@ class SimulatorDevice {
   }
 
   createModel() {
+    if (this.deviceType === 'Solis inverter') {
+      return {
+        manufacturer: 'Solis',
+        phaseVoltage: [230.2, 231.5, 229.6],
+        frequency: 50.02,
+        deratingRaw: 10000, // active power limit 0-10000 (0.1%), register 3050
+        totalYieldKwh: 65432.1,
+        dailyYieldKwh: 310.5,
+        monthlyYieldKwh: 9876.5,
+        yesterdayYieldKwh: 305.2,
+        meterImportKwh: 1521.3,
+        meterExportKwh: 118.7,
+        startedAt: null,
+      };
+    }
     if (this.deviceType === 'Huawei SUN2000 inverter') {
       return {
         manufacturer: 'Huawei',
@@ -391,6 +406,9 @@ class SimulatorDevice {
     if (definition.key === 'tariff_enable') {
       this.model.tariff = Math.round(decoded.value) ? 1 : 0;
     }
+    if (definition.key === 'active_power_limit') {
+      this.model.deratingRaw = Math.min(10000, Math.max(0, Math.round(decoded.value / 0.1)));
+    }
     if (definition.key === 'reactive_power_pf_command') {
       this.model.pfCommand = decoded.value;
     }
@@ -413,7 +431,9 @@ class SimulatorDevice {
     const values =
       this.deviceType === 'Huawei SUN2000 inverter'
         ? this.computeHuawei()
-        : this.computeEm500();
+        : this.deviceType === 'Solis inverter'
+          ? this.computeSolis()
+          : this.computeEm500();
 
     for (const register of this.profile.registers) {
       let engineeringValue = values[register.key];
@@ -458,32 +478,38 @@ class SimulatorDevice {
     return this.getStatus();
   }
 
+  /** Sum of all running inverter simulators (Huawei + Solis), so the meter's
+   *  grid reading reflects every inverter on the site. */
   defaultCoupledInverterKw() {
     try {
       const { getDevice } = require('../simulator');
-      const inverter = getDevice('huawei');
-      if (!inverter || inverter.getStatus().state !== 'RUNNING') {
-        return 0;
+      const keys = ['huawei', 'solis'];
+      let total = 0;
+      for (const key of keys) {
+        const inverter = getDevice(key);
+        if (!inverter || inverter.getStatus().state !== 'RUNNING') continue;
+        const value = inverter.values.get('active_power');
+        if (value) {
+          // Huawei publishes kW; Solis publishes W (scale 1 register).
+          total += key === 'solis' ? Number(value.value) / 1000 : Number(value.value);
+          continue;
+        }
+        // Fallback: deterministic model output before the first published tick.
+        const model = inverter.model;
+        if (!model || model.deratingRaw === undefined) continue;
+        const ratingKw = inverter.configuration.options?.ratingKw ?? 100;
+        const availabilityPct = inverter.configuration.options?.availabilityPct ?? 100;
+        const deratingFraction =
+          key === 'solis'
+            ? clamp(model.deratingRaw, 0, 10000) / 10000
+            : clamp(model.deratingRaw, 0, 1000) / 1000;
+        let kw = ratingKw * (availabilityPct / 100) * deratingFraction;
+        if (model.fixedDeratingW > 0) {
+          kw = Math.min(kw, model.fixedDeratingW / 1000);
+        }
+        total += Math.max(0, kw);
       }
-      // Use the inverter's latest published output (the same value the
-      // inverter card and polls show), so grid + inverter = load exactly.
-      const value = inverter.values.get('active_power');
-      if (value) {
-        return Number(value.value);
-      }
-      // Fallback: deterministic model output before the first published tick.
-      const model = inverter.model;
-      if (!model || model.deratingRaw === undefined) {
-        return 0;
-      }
-      const ratingKw = inverter.configuration.options?.ratingKw ?? 100;
-      const availabilityPct = inverter.configuration.options?.availabilityPct ?? 100;
-      const deratingFraction = clamp(model.deratingRaw, 0, 1000) / 1000;
-      let kw = ratingKw * (availabilityPct / 100) * deratingFraction;
-      if (model.fixedDeratingW > 0) {
-        kw = Math.min(kw, model.fixedDeratingW / 1000);
-      }
-      return Math.max(0, kw);
+      return total;
     } catch {
       return 0;
     }
@@ -511,6 +537,10 @@ class SimulatorDevice {
     if (coupled) {
       const inverterKw = this.coupledInverterKw();
       gridW = (loadKw - inverterKw) * 1000;
+      // The EM500 registers use INT32 raw with /100 scaling (max ±21.4 MW).
+      // Clamp so a huge mismatch never overflows the wire format; the meter
+      // simply pegs at its maximum reading.
+      gridW = clamp(gridW, -2000000, 2000000);
       currents = [0, 1, 2].map(
         (index) => Math.abs(gridW / 3) / (p.voltage[index] * p.powerFactor[index]),
       );
@@ -633,6 +663,91 @@ class SimulatorDevice {
       l3_import_active_energy: e.l3ImportActive,
       l3_partial_apparent_energy: e.l3PartialApparent,
     };
+  }
+
+  computeSolis() {
+    const model = this.model;
+    const options = this.configuration.options;
+
+    model.phaseVoltage = model.phaseVoltage.map((v) => drift(v, 0.5, 225, 240));
+    model.frequency = drift(model.frequency, 0.02, 49.9, 50.1);
+
+    const ratingKw = options.ratingKw || 100;
+    const availabilityPct = clamp(options.availabilityPct ?? 100, 0, 100);
+    const loadKw = options.loadKw ?? 100;
+
+    const limitFraction = clamp(model.deratingRaw, 0, 10000) / 10000;
+    let outputKw = ratingKw * (availabilityPct / 100) * limitFraction;
+    outputKw = Math.max(0, outputKw * (0.97 + Math.random() * 0.06));
+
+    const dtHours = this.configuration.updateIntervalMs / 3600000;
+    model.totalYieldKwh += outputKw * dtHours;
+    model.dailyYieldKwh += outputKw * dtHours;
+    model.monthlyYieldKwh += outputKw * dtHours;
+    model.yesterdayYieldKwh += outputKw * dtHours;
+
+    const avgVoltage = model.phaseVoltage.reduce((a, b) => a + b, 0) / 3;
+    const pf = 0.99;
+    const current = (outputKw * 1000) / (3 * avgVoltage * pf);
+
+    // External-meter view: grid = load - inverter output (import positive).
+    const gridW = (loadKw - outputKw) * 1000;
+    const importKw = Math.max(gridW, 0) / 1000;
+    const exportKw = Math.max(-gridW, 0) / 1000;
+    model.meterImportKwh += importKw * dtHours;
+    model.meterExportKwh += exportKw * dtHours;
+
+    // MPPT strings: split DC power across 4 active MPPT channels.
+    const dcPowerKw = outputKw / 0.982;
+    const mpptVoltages = Array.from({ length: 4 }, (_, index) => drift(600 + index * 8, 2, 560, 660));
+    const mpptCurrents = mpptVoltages.map((voltage) => clamp((dcPowerKw * 1000) / 4 / voltage, 0.5, 25));
+
+    // DC strings 1-32: 32 strings across 4 groups.
+    const stringVoltages = Array.from({ length: 32 }, (_, index) =>
+      drift(320 + (index % 8) * 6, 1.5, 280, 420),
+    );
+    const stringCurrents = stringVoltages.map((voltage) =>
+      clamp((dcPowerKw * 1000) / 32 / voltage, 0.1, 15),
+    );
+
+    const values = {
+      // The Solis AC registers are in watts (scale 1); outputKw is kW.
+      active_power: outputKw * 1000,
+      reactive_power: outputKw * 1000 * 0.08,
+      apparent_power: (outputKw * 1000) / pf,
+      grid_voltage_a: model.phaseVoltage[0],
+      grid_voltage_b: model.phaseVoltage[1],
+      grid_voltage_c: model.phaseVoltage[2],
+      grid_current_a: current,
+      grid_current_b: current,
+      grid_current_c: current,
+      grid_frequency: model.frequency,
+      power_factor: pf,
+      daily_generation: model.dailyYieldKwh,
+      monthly_generation: model.monthlyYieldKwh,
+      yesterday_generation: model.yesterdayYieldKwh,
+      inverter_temperature: 41.2,
+      inverter_status: model.startedAt || this.state === 'RUNNING' ? 1 : 0,
+      fault_code_1: 0,
+      fault_code_2: 0,
+      meter_grid_active_power: gridW,
+      meter_active_power_a: gridW / 3,
+      meter_active_power_b: gridW / 3,
+      meter_active_power_c: gridW / 3,
+      active_power_limit: model.deratingRaw * 0.1, // engineering % read-back
+    };
+
+    for (let index = 0; index < 15; index += 1) {
+      const channel = index < 4 ? index : 3;
+      values[`mppt${index + 1}_voltage`] = mpptVoltages[channel];
+      values[`mppt${index + 1}_current`] = mpptCurrents[channel];
+    }
+    for (let index = 0; index < 32; index += 1) {
+      values[`string${index + 1}_voltage`] = stringVoltages[index];
+      values[`string${index + 1}_current`] = stringCurrents[index];
+    }
+
+    return values;
   }
 
   computeHuawei() {

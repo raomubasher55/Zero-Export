@@ -178,13 +178,14 @@ export function ZeroExportView({ devices, profiles, notify }) {
     },
   });
 
-  /** Keep both simulators' site load in sync with the planned load. */
+  /** Keep all simulators' site load in sync with the planned load. */
   const syncSimulatorLoad = async (simulation) => {
     if (!simulation?.enabled) return;
     const loadKw = Number(simulation.loadKw);
     try {
       await api.updateSimulatorDevice("em500", { options: { loadKw } });
       await api.updateSimulatorDevice("huawei", { options: { loadKw } });
+      await api.updateSimulatorDevice("solis", { options: { loadKw } });
     } catch {
       // The simulators may not exist; the controller still works.
     }

@@ -9,6 +9,7 @@ const { simulatorDeviceUpdateSchema } = require('../src/validators/simulator.val
 const { decodeRegister } = require('../src/modbus/register-decoder');
 const { EM500_PROFILE } = require('../src/seed/em500.profile');
 const { HUAWEI_SUN2000_PROFILE } = require('../src/seed/huawei-sun2000.profile');
+const { SOLIS_PROFILE } = require('../src/seed/solis-inverter.profile');
 
 function silentLogger() {
   return {
@@ -52,6 +53,9 @@ const EM500_BY_KEY = new Map(
 );
 const HUAWEI_BY_KEY = new Map(
   HUAWEI_SUN2000_PROFILE.registers.map((register) => [register.key, register]),
+);
+const SOLIS_BY_KEY = new Map(
+  SOLIS_PROFILE.registers.map((register) => [register.key, register]),
 );
 
 test('EM500 simulator serves raw words that decode back with the EM500 profile', async () => {
@@ -176,18 +180,65 @@ test('Huawei simulator serves holding registers and accepts derating writes', as
   await instance.stop();
 });
 
-test('simulator manager exposes both devices and their values', async () => {
+test('simulator manager exposes every device and their values', async () => {
   const status = getStatus();
-  assert.deepEqual(Object.keys(status.devices).sort(), ['em500', 'huawei']);
+  assert.deepEqual(Object.keys(status.devices).sort(), ['em500', 'huawei', 'solis']);
   // Stopped devices serve no values until started and ticked.
   assert.equal(getValues('em500').length, 0);
   assert.equal(getValues('huawei').length, 0);
+  assert.equal(getValues('solis').length, 0);
   assert.equal(getValues('unknown').length, 0);
   assert.equal(simulatorDevices.huawei.getStatus().port, 15021);
   assert.equal(simulatorDevices.huawei.getStatus().unitId, 2);
   assert.equal(simulatorDevices.em500.getStatus().port, 15020);
   assert.equal(simulatorDevices.em500.getStatus().unitId, 1);
   assert.equal(simulatorDevices.huawei.getStatus().deviceType, 'Huawei SUN2000 inverter');
+  assert.equal(simulatorDevices.solis.getStatus().port, 15022);
+  assert.equal(simulatorDevices.solis.getStatus().unitId, 3);
+  assert.equal(simulatorDevices.solis.getStatus().deviceType, 'Solis inverter');
+});
+
+test('Solis simulator serves FC04 inputs and accepts active power limit writes', async () => {
+  const { instance } = device({
+    profile: SOLIS_PROFILE,
+    deviceType: 'Solis inverter',
+    configuration: { port: 15022, unitId: 3, updateIntervalMs: 60000 },
+    options: { ratingKw: 100, availabilityPct: 80, loadKw: 100 },
+  });
+  await instance.start();
+
+  const vector = instance.createVector();
+
+  const voltageWords = vector.getMultipleInputRegisters(3008, 1, 3);
+  const voltage = decodeRegister(SOLIS_BY_KEY.get('grid_voltage_a'), voltageWords);
+  assert.ok(voltage.value > 225 && voltage.value < 240, `grid voltage in range, got ${voltage.value}`);
+
+  const powerWords = vector.getMultipleInputRegisters(3003, 2, 3);
+  const power = decodeRegister(SOLIS_BY_KEY.get('active_power'), powerWords);
+  assert.ok(power.value > 40000 && power.value < 90000, `output in range, got ${power.value} W`);
+
+  // Power limit write: 10000 = 100%, 5000 = 50%.
+  assert.equal(vector.getHoldingRegister(3050, 3), 10000, 'limit starts at 100%');
+  vector.setRegister(3050, 5000, 3);
+  assert.equal(instance.model.deratingRaw, 5000, 'write updates the model');
+  instance.tick();
+  const cappedWords = vector.getMultipleInputRegisters(3003, 2, 3);
+  const capped = decodeRegister(SOLIS_BY_KEY.get('active_power'), cappedWords);
+  assert.ok(capped.value < power.value * 0.7, `output dropped after 50% limit (${capped.value} W)`);
+  assert.equal(vector.getHoldingRegister(3050, 3), 5000, 'limit read-back');
+
+  // Meter grid power is coupled to the site load.
+  const meterWords = vector.getMultipleInputRegisters(3205, 2, 3);
+  const meter = decodeRegister(SOLIS_BY_KEY.get('meter_grid_active_power'), meterWords);
+  assert.ok(Number.isFinite(meter.value), `meter grid power served, got ${meter.value} W`);
+
+  // 51-register batch exceeds the 50-register profile limit.
+  assert.throws(
+    () => vector.getMultipleInputRegisters(3003, 51, 3),
+    (error) => error.modbusErrorCode === 0x03,
+  );
+
+  await instance.stop();
 });
 
 test('EM500 simulator couples to the inverter when a site load is configured', async () => {

@@ -24,7 +24,7 @@ import { Field, SwitchRow } from "@/components/common/FormControls";
 import { api } from "@/lib/api";
 import { formatValue } from "@/lib/formatters";
 
-const DEVICE_KEYS = ["em500", "huawei"];
+const DEVICE_KEYS = ["em500", "huawei", "solis"];
 
 const DEVICE_DEFAULTS = {
   em500: { label: "EM500 grid meter", port: "15020", unitId: "1", loadKw: "100" },
@@ -35,7 +35,17 @@ const DEVICE_DEFAULTS = {
     ratingKw: "100",
     availabilityPct: "80",
   },
+  solis: {
+    label: "Solis inverter",
+    port: "15022",
+    unitId: "3",
+    ratingKw: "100",
+    availabilityPct: "80",
+  },
 };
+
+// Derating register per inverter device (0.1% steps).
+const DERATING_REGISTER = { huawei: 40125, solis: 3050 };
 
 export function SimulatorView({ devices, profiles, notify, onForwardProfile }) {
   const [status, setStatus] = useState(null);
@@ -110,11 +120,12 @@ export function SimulatorView({ devices, profiles, notify, onForwardProfile }) {
       if (cancelled) return;
       if (!document.hidden) {
         try {
-          const [em500, huawei] = await Promise.all([
+          const [em500, huawei, solis] = await Promise.all([
             api.getSimulatorValues("em500"),
             api.getSimulatorValues("huawei"),
+            api.getSimulatorValues("solis"),
           ]);
-          setValues({ em500: em500.data || [], huawei: huawei.data || [] });
+          setValues({ em500: em500.data || [], huawei: huawei.data || [], solis: solis.data || [] });
           failures = 0;
         } catch {
           failures += 1;
@@ -139,10 +150,15 @@ export function SimulatorView({ devices, profiles, notify, onForwardProfile }) {
     () => profiles.find((profile) => profile.identifier === "huawei-sun2000"),
     [profiles],
   );
+  const solisProfile = useMemo(
+    () => profiles.find((profile) => profile.identifier === "solis-inverter"),
+    [profiles],
+  );
   const simulatorDevices = useMemo(
     () => ({
       em500: devices.find((device) => device.identifier === "em500-simulator"),
       huawei: devices.find((device) => device.identifier === "huawei-simulator"),
+      solis: devices.find((device) => device.identifier === "solis-simulator"),
     }),
     [devices],
   );
@@ -174,7 +190,7 @@ export function SimulatorView({ devices, profiles, notify, onForwardProfile }) {
       unitId: Number(form.unitId),
       updateIntervalMs: Number(form.updateIntervalMs),
     };
-    if (deviceKey === "huawei") {
+    if (deviceKey === "huawei" || deviceKey === "solis") {
       payload.options = {
         ratingKw: Number(form.ratingKw),
         availabilityPct: Number(form.availabilityPct),
@@ -183,10 +199,13 @@ export function SimulatorView({ devices, profiles, notify, onForwardProfile }) {
     if (deviceKey === "em500") {
       const loadKw = Number(form.loadKw);
       payload.options = { loadKw };
-      // The Huawei inverter mirrors the same grid point, so keep its load
-      // setting in sync too.
+      // The inverters mirror the same grid point, so keep their load
+      // settings in sync too.
       void api
         .updateSimulatorDevice("huawei", { options: { loadKw } })
+        .catch(() => undefined);
+      void api
+        .updateSimulatorDevice("solis", { options: { loadKw } })
         .catch(() => undefined);
     }
     const maxReadQuantity = form.maxReadQuantity.trim();
@@ -223,6 +242,7 @@ export function SimulatorView({ devices, profiles, notify, onForwardProfile }) {
     const missing = [];
     if (!em500Profile) missing.push("EM500 profile (restore built-ins)");
     if (!huaweiProfile) missing.push("Huawei profile (restore built-ins)");
+    if (!solisProfile) missing.push("Solis profile (restore built-ins)");
     if (missing.length > 0) {
       notify(`Missing: ${missing.join(", ")}`, "error");
       return;
@@ -230,6 +250,7 @@ export function SimulatorView({ devices, profiles, notify, onForwardProfile }) {
     try {
       const em500UnitId = Number(forms.em500.unitId);
       const huaweiUnitId = Number(forms.huawei.unitId);
+      const solisUnitId = Number(forms.solis.unitId);
       const created = [];
       if (!simulatorDevices.em500) {
         await api.createDevice({
@@ -259,6 +280,20 @@ export function SimulatorView({ devices, profiles, notify, onForwardProfile }) {
         });
         created.push("Huawei inverter");
       }
+      if (!simulatorDevices.solis) {
+        await api.createDevice({
+          identifier: "solis-simulator",
+          name: "Solis Inverter Simulator",
+          site: "Simulator",
+          unitId: solisUnitId,
+          connection: { protocol: "TCP", host: "127.0.0.1", port: Number(forms.solis.port) },
+          registerProfileId: solisProfile._id,
+          polling: { enabled: true, intervalMs: 5000, jitterMs: 1000 },
+          reconnect: { timeoutMs: 2000, retries: 1, retryDelayMs: 200 },
+          tags: ["simulator"],
+        });
+        created.push("Solis inverter");
+      }
       notify(
         created.length > 0
           ? `Simulator devices created and polling: ${created.join(", ")}.`
@@ -277,11 +312,11 @@ export function SimulatorView({ devices, profiles, notify, onForwardProfile }) {
     await onForwardProfile(profile);
   };
 
-  /** Write a derating percentage to the inverter like an external master would. */
-  const setInverterDerating = async () => {
-    const deviceRef = simulatorDevices.huawei;
+  /** Write a derating percentage to an inverter like an external master would. */
+  const setInverterDerating = async (deviceKey) => {
+    const deviceRef = simulatorDevices[deviceKey];
     if (!deviceRef) {
-      notify("Create the Huawei simulator device first.", "error");
+      notify(`Create the ${DEVICE_DEFAULTS[deviceKey].label} simulator device first.`, "error");
       return;
     }
     const pct = Number(deratingPct);
@@ -289,15 +324,16 @@ export function SimulatorView({ devices, profiles, notify, onForwardProfile }) {
       notify("Derating must be between 0 and 100 percent.", "error");
       return;
     }
-    setWorking("huawei");
+    const address = DERATING_REGISTER[deviceKey];
+    setWorking(deviceKey);
     try {
       await api.rawWrite(deviceRef._id, {
         registerType: "HOLDING_REGISTER",
-        address: 40125,
+        address,
         values: [Math.round(pct * 10)],
       });
       notify(
-        `Inverter derating set to ${pct}% (raw ${Math.round(pct * 10)} on register 40125).`,
+        `${DEVICE_DEFAULTS[deviceKey].label} derating set to ${pct}% (raw ${Math.round(pct * 10)} on register ${address}).`,
       );
     } catch (writeError) {
       notify(
@@ -403,7 +439,7 @@ export function SimulatorView({ devices, profiles, notify, onForwardProfile }) {
                   </span>
                   <span>·</span>
                   <span>Unit {deviceStatus?.unitId ?? form.unitId}</span>
-                  {key === "huawei" && (
+                  {(key === "huawei" || key === "solis") && (
                     <>
                       <span>·</span>
                       <span>
@@ -446,7 +482,7 @@ export function SimulatorView({ devices, profiles, notify, onForwardProfile }) {
                       onChange={(event) => setField(key, "updateIntervalMs", event.target.value)}
                     />
                   </Field>
-                  {key === "huawei" && (
+                  {(key === "huawei" || key === "solis") && (
                     <>
                       <Field label="Solar rating (kW)">
                         <Input
@@ -513,11 +549,11 @@ export function SimulatorView({ devices, profiles, notify, onForwardProfile }) {
                   </div>
                 )}
 
-                {key === "huawei" && (
+                {(key === "huawei" || key === "solis") && (
                   <div className="flex flex-wrap items-end gap-2 rounded-lg border border-slate-100 bg-slate-50 p-3">
                     <Field
                       label="Set derating (%)"
-                      hint="Write like an external master: 40125 = percent × 10 (100 → 1000)."
+                      hint={`Write like an external master: ${DERATING_REGISTER[key]} = percent × 10 (100 → ${DERATING_REGISTER[key] === 40125 ? 1000 : 10000}% raw = 100%).`}
                     >
                       <Input
                         type="number"
@@ -531,12 +567,12 @@ export function SimulatorView({ devices, profiles, notify, onForwardProfile }) {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={setInverterDerating}
-                      disabled={!simulatorDevices.huawei || Boolean(working)}
+                      onClick={() => setInverterDerating(key)}
+                      disabled={!simulatorDevices[key] || Boolean(working)}
                       title={
-                        simulatorDevices.huawei
-                          ? "Write the percentage to the inverter's derating register."
-                          : "Create the Huawei simulator device first."
+                        simulatorDevices[key]
+                          ? `Write the percentage to the ${DEVICE_DEFAULTS[key].label}'s derating register.`
+                          : `Create the ${DEVICE_DEFAULTS[key].label} simulator device first.`
                       }
                     >
                       <Zap className="h-4 w-4" /> Write to inverter
@@ -562,7 +598,15 @@ export function SimulatorView({ devices, profiles, notify, onForwardProfile }) {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => forward(key === "em500" ? em500Profile : huaweiProfile)}
+                    onClick={() =>
+                      forward(
+                        key === "em500"
+                          ? em500Profile
+                          : key === "huawei"
+                            ? huaweiProfile
+                            : solisProfile,
+                      )
+                    }
                     disabled={!deviceRef || Boolean(working)}
                     title={
                       deviceRef
