@@ -317,14 +317,19 @@ export function ZeroExportView({ devices, profiles, notify }) {
       ? Number(inverterReading.value)
       : null;
 
-  const loadKw =
-    gridKw !== null && inverterKw !== null ? gridKw + inverterKw : null;
-  // When the controller runs in simulation mode, the planned load is shown
-  // as a hint next to the live grid + inverter sum.
+  // Site load: in simulation mode the meter is coupled to the planned load
+  // (grid = load − all inverter outputs), so the planned load is the correct
+  // display value. Otherwise show the live grid + configured-inverter sum.
   const plannedLoadKw =
     form?.simulationEnabled && Number(form.loadKw) > 0
       ? Number(form.loadKw)
       : null;
+  const loadKw =
+    plannedLoadKw !== null
+      ? plannedLoadKw
+      : gridKw !== null && inverterKw !== null
+        ? gridKw + inverterKw
+        : null;
 
   const deratingReading = readingFor(inverterId, "active_power_derating");
   const liveDeratingPct =
@@ -419,7 +424,7 @@ export function ZeroExportView({ devices, profiles, notify }) {
                 {loadKw === null
                   ? "Waiting for meter and inverter values"
                   : plannedLoadKw !== null
-                    ? `Grid + inverter (planned ${formatValue(plannedLoadKw)} kW)`
+                    ? `Planned load (meter coupled to ${formatValue(plannedLoadKw)} kW)`
                     : "Grid + inverter"}
               </p>
             </div>
