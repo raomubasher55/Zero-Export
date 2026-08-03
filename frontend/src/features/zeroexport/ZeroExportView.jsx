@@ -74,28 +74,49 @@ export function ZeroExportView({ devices, profiles, notify }) {
   }, [load]);
 
   useEffect(() => {
-    const interval = setInterval(async () => {
-      try {
-        const response = await api.getZeroExport();
-        setData(response.data);
-        const configuration = response.data.configuration;
-        const ids = [configuration?.meterDeviceId, configuration?.inverterDeviceId].filter(Boolean);
-        const entries = await Promise.all(
-          ids.map(async (deviceId) => {
-            try {
-              const values = await api.listLatestValues(deviceId, { limit: 100 });
-              return [String(deviceId), values.data || []];
-            } catch {
-              return [String(deviceId), []];
-            }
-          }),
-        );
-        setLatestByDevice(Object.fromEntries(entries));
-      } catch {
-        // The controller may be stopping; the next poll retries.
+    let cancelled = false;
+    let timer;
+    let failures = 0;
+
+    const tick = async () => {
+      if (cancelled) return;
+      if (!document.hidden) {
+        try {
+          const response = await api.getZeroExport();
+          setData(response.data);
+          const configuration = response.data.configuration;
+          const ids = [configuration?.meterDeviceId, configuration?.inverterDeviceId].filter(Boolean);
+          const entries = await Promise.all(
+            ids.map(async (deviceId) => {
+              try {
+                const values = await api.listLatestValues(deviceId, { limit: 100 });
+                return [String(deviceId), values.data || []];
+              } catch {
+                return [String(deviceId), []];
+              }
+            }),
+          );
+          setLatestByDevice(Object.fromEntries(entries));
+          failures = 0;
+          setError("");
+        } catch {
+          failures += 1;
+          if (failures === 3) {
+            setError(
+              "Backend is unreachable. Check that the backend is running on port 3001, then refresh.",
+            );
+          }
+        }
       }
-    }, 3000);
-    return () => clearInterval(interval);
+      // Back off when the backend is down: 3s normally, 15s after failures.
+      timer = setTimeout(tick, failures >= 3 ? 15000 : 3000);
+    };
+
+    timer = setTimeout(tick, 3000);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
   }, []);
 
   const set = (field, value) =>

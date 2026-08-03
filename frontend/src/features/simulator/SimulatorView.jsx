@@ -102,18 +102,33 @@ export function SimulatorView({ devices, profiles, notify, onForwardProfile }) {
   }, [load]);
 
   useEffect(() => {
-    const interval = setInterval(async () => {
-      try {
-        const [em500, huawei] = await Promise.all([
-          api.getSimulatorValues("em500"),
-          api.getSimulatorValues("huawei"),
-        ]);
-        setValues({ em500: em500.data || [], huawei: huawei.data || [] });
-      } catch {
-        // The simulator may be stopped; the status cards show the state.
+    let cancelled = false;
+    let timer;
+    let failures = 0;
+
+    const tick = async () => {
+      if (cancelled) return;
+      if (!document.hidden) {
+        try {
+          const [em500, huawei] = await Promise.all([
+            api.getSimulatorValues("em500"),
+            api.getSimulatorValues("huawei"),
+          ]);
+          setValues({ em500: em500.data || [], huawei: huawei.data || [] });
+          failures = 0;
+        } catch {
+          failures += 1;
+        }
       }
-    }, 3000);
-    return () => clearInterval(interval);
+      // Back off when the backend is down: 3s normally, 15s after failures.
+      timer = setTimeout(tick, failures >= 3 ? 15000 : 3000);
+    };
+
+    timer = setTimeout(tick, 3000);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
   }, []);
 
   const em500Profile = useMemo(
