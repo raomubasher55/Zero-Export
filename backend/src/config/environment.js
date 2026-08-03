@@ -113,7 +113,7 @@ const config = Object.freeze({
     corsOrigins: Object.freeze(corsOrigins),
     requestBodyLimit: process.env.REQUEST_BODY_LIMIT || '1mb',
     rateLimitWindowMs: readInteger('RATE_LIMIT_WINDOW_MS', 15 * 60 * 1000, { min: 1000, max: 24 * 60 * 60 * 1000 }),
-    rateLimitMaxRequests: readInteger('RATE_LIMIT_MAX_REQUESTS', 500, { min: 1, max: 100000 }),
+    rateLimitMaxRequests: readInteger('RATE_LIMIT_MAX_REQUESTS', 500, { min: 1, max: 1000000 }),
   }),
   logging: Object.freeze({
     level: process.env.LOG_LEVEL || (environment === 'production' ? 'info' : 'debug'),

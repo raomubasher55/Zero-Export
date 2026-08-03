@@ -69,7 +69,7 @@ app.use(compression());
 app.use(hpp());
 app.use(express.json({ limit: config.http.requestBodyLimit }));
 app.use(express.urlencoded({ extended: false, limit: config.http.requestBodyLimit }));
-app.use(apiRateLimiter);
+// app.use(apiRateLimiter);
 
 app.use(healthRoutes);
 app.use('/api/v1', apiRoutes);
