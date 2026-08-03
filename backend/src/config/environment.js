@@ -116,7 +116,7 @@ const config = Object.freeze({
     // realtime polling (1s simulator + 3s dashboard) exceeds 500 req/15min.
     rateLimitEnabled: readBoolean('RATE_LIMIT_ENABLED', false),
     rateLimitWindowMs: readInteger('RATE_LIMIT_WINDOW_MS', 15 * 60 * 1000, { min: 1000, max: 24 * 60 * 60 * 1000 }),
-    rateLimitMaxRequests: readInteger('RATE_LIMIT_MAX_REQUESTS', 500, { min: 1, max: 1000000 }),
+    rateLimitMaxRequests: readInteger('RATE_LIMIT_MAX_REQUESTS', 500, { min: 1, max: 100000 }),
   }),
   logging: Object.freeze({
     level: process.env.LOG_LEVEL || (environment === 'production' ? 'info' : 'debug'),

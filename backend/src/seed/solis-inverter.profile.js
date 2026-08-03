@@ -26,7 +26,10 @@ function register({ address, key, name, dataType, scaleFactor = 1, unit, group, 
   return {
     key,
     name,
-    registerType: writable ? 'HOLDING_REGISTER' : 'INPUT_REGISTER',
+    // All Solis measurement registers are served as holding registers (FC03)
+    // per the site's wiring; the power limit stays a writable holding
+    // register (FC03/FC06/FC16).
+    registerType: 'HOLDING_REGISTER',
     address,
     dataType,
     length: expectedWordLength(dataType),
@@ -138,7 +141,7 @@ const SOLIS_PROFILE = Object.freeze({
   identifier: 'solis-inverter',
   name: 'Solis inverter (Solics)',
   description:
-    'Built-in Solis (Ginlong) inverter register map (Modbus RTU): AC grid voltages/currents/frequency, active/apparent/reactive power, power factor, generation yields, inverter status and faults, external-meter grid power (import/export signed), 15 MPPT channels, 32 DC string channels, and the writable active power limit (holding register, 0.1% steps). Wire address = document register - 1; real-time values are input registers (FC04), the power limit is a holding register (FC03/FC06/FC16).',
+    'Built-in Solis (Ginlong) inverter register map (Modbus RTU): AC grid voltages/currents/frequency, active/apparent/reactive power, power factor, generation yields, inverter status and faults, external-meter grid power (import/export signed), 15 MPPT channels, 32 DC string channels, and the writable active power limit. All registers are holding registers (FC03 read); the power limit at 3051 is writable (FC06/FC16, 0.1% steps).',
   manufacturer: 'Solis (Ginlong)',
   model: 'Solis inverter',
   registers: Object.freeze(registers),
@@ -146,9 +149,9 @@ const SOLIS_PROFILE = Object.freeze({
   maxReadQuantity: 50,
   tags: Object.freeze(['solis', 'solics', 'inverter', 'built-in']),
   metadata: Object.freeze({
-    profileVersion: 2,
+    profileVersion: 3,
     notes:
-      'Active power limit served at document address 3051 (wire = 3051) per the site control layout. Reactive power placed at 0x0BBD to avoid overlapping active power; total generation omitted (listed at the same address as Grid Voltage A) until confirmed.',
+      'All registers served as holding registers (FC03) per the site wiring; the active power limit stays a writable holding register at 3051. Reactive power placed at 0x0BBD to avoid overlapping active power; total generation omitted (listed at the same address as Grid Voltage A) until confirmed.',
   }),
 });
 
