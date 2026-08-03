@@ -112,6 +112,9 @@ const config = Object.freeze({
   http: Object.freeze({
     corsOrigins: Object.freeze(corsOrigins),
     requestBodyLimit: process.env.REQUEST_BODY_LIMIT || '1mb',
+    // Personal/single-user deployments usually want this off because the
+    // realtime polling (1s simulator + 3s dashboard) exceeds 500 req/15min.
+    rateLimitEnabled: readBoolean('RATE_LIMIT_ENABLED', false),
     rateLimitWindowMs: readInteger('RATE_LIMIT_WINDOW_MS', 15 * 60 * 1000, { min: 1000, max: 24 * 60 * 60 * 1000 }),
     rateLimitMaxRequests: readInteger('RATE_LIMIT_MAX_REQUESTS', 500, { min: 1, max: 1000000 }),
   }),

@@ -4,12 +4,16 @@ const {
   getDevice,
   getStatus,
   getValues,
+  startDevice,
+  stopDevice,
 } = require('../simulator');
+const SimulatorSettingsRepository = require('../repositories/simulator-settings.repository');
 const { sendSuccess } = require('../utils/api-response');
 
 class SimulatorController {
-  constructor(runtime = { getStatus, getValues, getDevice }) {
+  constructor(runtime = { getStatus, getValues, getDevice }, settingsRepository = new SimulatorSettingsRepository()) {
     this.runtime = runtime;
+    this.settingsRepository = settingsRepository;
     this.get = this.get.bind(this);
     this.getValues = this.getValues.bind(this);
     this.updateDevice = this.updateDevice.bind(this);
@@ -30,24 +34,38 @@ class SimulatorController {
   }
 
   async updateDevice(req, res) {
-    const device = this.runtime.getDevice(req.validated.params.deviceKey);
+    const deviceKey = req.validated.params.deviceKey;
+    const device = this.runtime.getDevice(deviceKey);
     const wasRunning = device.getStatus().state === 'RUNNING';
-    await device.stop();
+    await stopDevice(deviceKey);
     device.configure(req.validated.body);
+
+    // Persist the settings so they survive a backend restart.
+    try {
+      await this.settingsRepository.save(deviceKey, req.validated.body);
+    } catch (error) {
+      // Persistence failure should not break the live configuration.
+      this.runtime.logger?.warn?.(`Unable to persist simulator settings for ${deviceKey}`, error?.message);
+    }
+
     if (wasRunning) {
-      await device.start();
+      await startDevice(deviceKey);
     }
     return sendSuccess(res, { data: device.getStatus() });
   }
 
   async startDevice(req, res) {
-    const device = this.runtime.getDevice(req.validated.params.deviceKey);
-    return sendSuccess(res, { data: await device.start() });
+    const deviceKey = req.validated.params.deviceKey;
+    await startDevice(deviceKey);
+    const device = this.runtime.getDevice(deviceKey);
+    return sendSuccess(res, { data: device.getStatus() });
   }
 
   async stopDevice(req, res) {
-    const device = this.runtime.getDevice(req.validated.params.deviceKey);
-    return sendSuccess(res, { data: await device.stop() });
+    const deviceKey = req.validated.params.deviceKey;
+    await stopDevice(deviceKey);
+    const device = this.runtime.getDevice(deviceKey);
+    return sendSuccess(res, { data: device.getStatus() });
   }
 }
 

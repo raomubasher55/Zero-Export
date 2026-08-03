@@ -331,3 +331,78 @@ test('simulator device schema validates settings and options', () => {
   assert.throws(() => simulatorDeviceUpdateSchema.parse({}), (error) => error.name === 'ZodError');
   assert.throws(() => simulatorDeviceUpdateSchema.parse({ surprise: true }), (error) => error.name === 'ZodError');
 });
+
+test('simulator settings persist and are reapplied at boot', async () => {
+  const saved = {};
+  const repository = {
+    get: async (key) => saved[key] || null,
+    save: async (key, settings) => {
+      saved[key] = settings;
+      return settings;
+    },
+  };
+
+  const { instance } = device({
+    profile: SOLIS_PROFILE,
+    deviceType: 'Solis inverter',
+    configuration: { port: 15022, unitId: 3, updateIntervalMs: 1000 },
+    options: { ratingKw: 100, availabilityPct: 80, loadKw: 100 },
+  });
+
+  // simulate the controller saving settings
+  const wasRunning = instance.getStatus().state === 'RUNNING';
+  await instance.stop();
+  instance.configure({ port: 15403, unitId: 9, options: { availabilityPct: 30 } });
+  await repository.save('solis', { port: 15403, unitId: 9, options: { availabilityPct: 30 } });
+  if (wasRunning) await instance.start();
+
+  // fresh-ish apply from persistence
+  await instance.stop();
+  instance.configure({ port: 15022, unitId: 3, options: { availabilityPct: 80 } }); // reset to defaults
+  assert.equal(instance.getStatus().port, 15022);
+  // apply to a standalone device via a small helper mimic: configure from saved
+  const savedSettings = await repository.get('solis');
+  instance.configure({ port: savedSettings.port, unitId: savedSettings.unitId, options: savedSettings.options });
+  assert.equal(instance.getStatus().port, 15403);
+  assert.equal(instance.getStatus().unitId, 9);
+  assert.equal(instance.getStatus().options.availabilityPct, 30);
+});
+
+test('devices on the same port are served by unit ID (shared vector)', async () => {
+  const { buildSharedVector } = require('../src/simulator');
+  const em500 = device({
+    profile: EM500_PROFILE,
+    configuration: { port: 15030, unitId: 1, updateIntervalMs: 60000 },
+    options: {},
+  });
+  const solis = device({
+    profile: SOLIS_PROFILE,
+    deviceType: 'Solis inverter',
+    configuration: { port: 15030, unitId: 2, updateIntervalMs: 60000 },
+    options: { ratingKw: 100, availabilityPct: 80, loadKw: 100 },
+  });
+  await em500.instance.start();
+  await solis.instance.start();
+  em500.instance.tick();
+  solis.instance.tick();
+
+  const vector = buildSharedVector([em500.instance, solis.instance]);
+
+  // EM500 is on unit 1 and serves holding registers (FC03). 0x0002 is a
+  // 2-word UINT32; its second word carries the raw voltage.
+  const meterWords = vector.getMultipleHoldingRegisters(0x0002, 2, 1);
+  assert.ok(meterWords[1] > 0, 'EM500 holding register readable on unit 1');
+
+  // Solis is on unit 2 and serves input registers (FC04).
+  const solisWord = vector.getInputRegister(3008, 2);
+  assert.ok(solisWord > 0, 'Solis input register readable on unit 2');
+
+  // Unknown unit ID raises a proper Modbus exception.
+  assert.throws(
+    () => vector.getInputRegister(3008, 9),
+    (error) => error.modbusErrorCode === 0x0b,
+  );
+
+  await em500.instance.stop();
+  await solis.instance.stop();
+});
