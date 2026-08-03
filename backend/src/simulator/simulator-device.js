@@ -311,8 +311,13 @@ class SimulatorDevice {
     };
   }
 
-  /** Per-profile FC03/FC04 batch limit (Huawei SUN2000: 15 registers). */
+  /** Per-profile FC03/FC04 batch limit (Huawei SUN2000: 15 registers).
+   *  The simulator option maxReadQuantity raises/lowers it (up to 125). */
   batchLimit() {
+    const option = this.configuration.options?.maxReadQuantity;
+    if (typeof option === 'number' && option >= 1 && option <= 125) {
+      return option;
+    }
     return this.profile?.maxReadQuantity || 125;
   }
 

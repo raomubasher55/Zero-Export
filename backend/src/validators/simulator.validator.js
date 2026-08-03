@@ -20,6 +20,7 @@ const simulatorDeviceUpdateSchema = z
         availabilityPct: z.number().finite().min(0).max(100).optional(),
         loadKw: z.number().finite().min(0).max(100000).optional(),
         zeroFillGaps: z.boolean().optional(),
+        maxReadQuantity: z.number().int().min(1).max(125).optional(),
       })
       .strict()
       .optional(),

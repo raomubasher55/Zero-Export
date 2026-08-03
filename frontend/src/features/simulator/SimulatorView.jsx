@@ -51,6 +51,7 @@ export function SimulatorView({ devices, profiles, notify, onForwardProfile }) {
           ratingKw: "100",
           availabilityPct: "80",
           loadKw: "100",
+          maxReadQuantity: "",
         },
       ]),
     ),
@@ -82,6 +83,9 @@ export function SimulatorView({ devices, profiles, notify, onForwardProfile }) {
             ),
             loadKw: String(
               device.options?.loadKw ?? next[key]?.loadKw ?? 100,
+            ),
+            maxReadQuantity: String(
+              device.options?.maxReadQuantity ?? next[key]?.maxReadQuantity ?? "",
             ),
           };
         }
@@ -169,6 +173,10 @@ export function SimulatorView({ devices, profiles, notify, onForwardProfile }) {
       void api
         .updateSimulatorDevice("huawei", { options: { loadKw } })
         .catch(() => undefined);
+    }
+    const maxReadQuantity = form.maxReadQuantity.trim();
+    if (maxReadQuantity !== "") {
+      payload.options = { ...payload.options, maxReadQuantity: Number(maxReadQuantity) };
     }
     return run(
       deviceKey,
@@ -426,6 +434,18 @@ export function SimulatorView({ devices, profiles, notify, onForwardProfile }) {
                       />
                     </Field>
                   )}
+                  <Field
+                    label="Max read quantity"
+                    hint="Raise to 125 to read big batches (e.g. 32016 × 80); empty = profile default (15)."
+                  >
+                    <Input
+                      type="number"
+                      min="1"
+                      max="125"
+                      value={form.maxReadQuantity}
+                      onChange={(event) => setField(key, "maxReadQuantity", event.target.value)}
+                    />
+                  </Field>
                 </div>
 
                 {key === "huawei" && (

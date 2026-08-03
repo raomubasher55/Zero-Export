@@ -144,6 +144,14 @@ test('Huawei simulator serves holding registers and accepts derating writes', as
     'reads up to 15 registers are allowed',
   );
 
+  // Raising maxReadQuantity allows big batch reads with zero-filled gaps.
+  await instance.stop();
+  instance.configure({ options: { maxReadQuantity: 125 } });
+  await instance.start();
+  const bigWords = vector.getMultipleHoldingRegisters(32016, 80, 2);
+  assert.equal(bigWords.length, 80, '80-word read succeeds with maxReadQuantity 125');
+  await instance.stop();
+
   assert.throws(
     () => vector.setRegister(32080, 1, 2),
     (error) => error.modbusErrorCode === 0x02,
