@@ -466,10 +466,10 @@ test('Sungrow simulator serves FC04 telemetry and FC03 identity', async () => {
     '51-register batch exceeds the 50 limit',
   );
 
-  // Active power control write on 5007 halves the output.
-  assert.equal(vector.getHoldingRegister(5007, 4), 10000, 'control starts at 100%');
-  vector.setRegister(5007, 5000, 4);
-  assert.equal(instance.model.deratingRaw, 5000, 'write updates the model');
+  // Active power control write on 5007 halves the output (0-1000 scale).
+  assert.equal(vector.getHoldingRegister(5007, 4), 1000, 'control starts at 100%');
+  vector.setRegister(5007, 500, 4);
+  assert.equal(instance.model.deratingRaw, 500, 'write updates the model');
   instance.tick();
   const cappedWords = vector.getMultipleInputRegisters(5031, 2, 4);
   const capped = decodeRegister(SUNGROW_BY_KEY.get('active_power'), cappedWords);

@@ -434,5 +434,5 @@ test('built-in Sungrow profile covers the protocol and telemetry map', () => {
   assert.equal(limit.address, 5007);
   assert.equal(limit.registerType, 'HOLDING_REGISTER');
   assert.equal(limit.writable, true);
-  assert.equal(limit.scaleFactor, 0.01);
+  assert.equal(limit.scaleFactor, 0.1, 'Sungrow 5007 uses 0-1000 (0.1% steps) like Huawei');
 });

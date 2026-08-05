@@ -154,7 +154,7 @@ class SimulatorDevice {
         manufacturer: 'Sungrow',
         phaseVoltage: [230.1, 231.0, 229.5],
         frequency: 50.0,
-        deratingRaw: 10000, // active power control 0-10000 (0.01%), register 5007
+        deratingRaw: 1000, // active power control 0-1000 (0.1%), register 5007
         totalYieldKwh: 98765.4,
         dailyYieldKwh: 420.3,
         runningHours: 12345,
@@ -451,10 +451,16 @@ class SimulatorDevice {
       this.model.tariff = Math.round(decoded.value) ? 1 : 0;
     }
     if (definition.key === 'active_power_limit_set') {
-      this.model.deratingRaw = Math.min(10000, Math.max(0, Math.round(decoded.value / 0.01)));
+      if (this.deviceType === 'Sungrow inverter') {
+        // 0-1000 = 0-100% (0.1% steps), like the Huawei derating.
+        this.model.deratingRaw = Math.min(1000, Math.max(0, Math.round(decoded.value * 10)));
+      } else {
+        // Solis 0-10000 = 0-1000% (0.01% steps).
+        this.model.deratingRaw = Math.min(10000, Math.max(0, Math.round(decoded.value * 100)));
+      }
     }
     if (definition.key === 'sungrow_active_power_limit') {
-      this.model.deratingRaw = Math.min(10000, Math.max(0, Math.round(decoded.value / 0.01)));
+      this.model.deratingRaw = Math.min(1000, Math.max(0, Math.round(decoded.value * 10)));
     }
     if (definition.key === 'reactive_power_pf_command') {
       this.model.pfCommand = decoded.value;
@@ -842,8 +848,8 @@ class SimulatorDevice {
     const ratingKw = options.ratingKw || 100;
     const availabilityPct = clamp(options.availabilityPct ?? 100, 0, 100);
 
-    // Active power control via 5007: 0-10000 = 0-100% in 0.01% steps.
-    const limitFraction = clamp(model.deratingRaw, 0, 10000) / 10000;
+    // Active power control via 5007: 0-1000 = 0-100% in 0.1% steps.
+    const limitFraction = clamp(model.deratingRaw, 0, 1000) / 1000;
     let outputKw = ratingKw * (availabilityPct / 100) * limitFraction;
     outputKw = Math.max(0, outputKw * (0.97 + Math.random() * 0.06));
 
@@ -897,7 +903,7 @@ class SimulatorDevice {
       power_factor: pf,
       grid_frequency: model.frequency,
       work_state: model.startedAt || this.state === 'RUNNING' ? 0 : 0x0020,
-      active_power_limit_set: model.deratingRaw * 0.01,
+      active_power_limit_set: model.deratingRaw * 0.1,
       mppt4_voltage: mpptVoltages[3],
       mppt4_current: mpptCurrents[3],
       mppt5_voltage: mpptVoltages[4],
