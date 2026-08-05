@@ -36,7 +36,7 @@ export function ZeroExportView({ devices, profiles, notify }) {
   const [data, setData] = useState(null);
   const [form, setForm] = useState(null);
   const [latestByDevice, setLatestByDevice] = useState({});
-  const [simValues, setSimValues] = useState({ em500: [], huawei: [], solis: [] });
+  const [simValues, setSimValues] = useState({ em500: [], huawei: [], solis: [], sungrow: [] });
   const [working, setWorking] = useState(false);
   const [error, setError] = useState("");
 
@@ -131,12 +131,13 @@ export function ZeroExportView({ devices, profiles, notify }) {
       if (cancelled) return;
       if (!document.hidden) {
         try {
-          const [em500, huawei, solis] = await Promise.all([
+          const [em500, huawei, solis, sungrow] = await Promise.all([
             api.getSimulatorValues("em500").then((r) => r.data || []).catch(() => []),
             api.getSimulatorValues("huawei").then((r) => r.data || []).catch(() => []),
             api.getSimulatorValues("solis").then((r) => r.data || []).catch(() => []),
+            api.getSimulatorValues("sungrow").then((r) => r.data || []).catch(() => []),
           ]);
-          setSimValues({ em500, huawei, solis });
+          setSimValues({ em500, huawei, solis, sungrow });
           failures = 0;
         } catch {
           failures += 1;
@@ -260,6 +261,7 @@ export function ZeroExportView({ devices, profiles, notify }) {
     if (identifier === "em500-simulator" || profileId === "em500") return "em500";
     if (identifier === "huawei-simulator" || profileId === "huawei-sun2000") return "huawei";
     if (identifier === "solis-simulator" || profileId === "solis-inverter") return "solis";
+    if (identifier === "sungrow-simulator" || profileId === "sungrow-inverter") return "sungrow";
     return null;
   };
 
@@ -320,15 +322,15 @@ export function ZeroExportView({ devices, profiles, notify }) {
   // Total solar: sum every inverter simulator's live output so the panel's
   // math reconciles with the meter (grid = load − ALL solar). Solis reports
   // watts, Huawei reports kW.
-  const SOLAR_LABELS = { huawei: "Huawei", solis: "Solis" };
+  const SOLAR_LABELS = { huawei: "Huawei", solis: "Solis", sungrow: "Sungrow" };
   const solarBreakdown = [];
-  for (const key of ["huawei", "solis"]) {
+  for (const key of ["huawei", "solis", "sungrow"]) {
     const sim = (simValues[key] || []).find((value) => value.registerKey === "active_power");
     if (sim && sim.value !== null && sim.value !== undefined) {
       solarBreakdown.push({
         key,
         label: SOLAR_LABELS[key] || key,
-        kw: key === "solis" ? Number(sim.value) / 1000 : Number(sim.value),
+        kw: ["solis", "sungrow"].includes(key) ? Number(sim.value) / 1000 : Number(sim.value),
       });
     }
   }

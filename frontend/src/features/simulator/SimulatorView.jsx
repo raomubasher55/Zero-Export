@@ -24,7 +24,7 @@ import { Field, Select, SwitchRow } from "@/components/common/FormControls";
 import { api } from "@/lib/api";
 import { formatValue } from "@/lib/formatters";
 
-const DEVICE_KEYS = ["em500", "huawei", "solis"];
+const DEVICE_KEYS = ["em500", "huawei", "solis", "sungrow"];
 
 const DEVICE_DEFAULTS = {
   em500: { label: "EM500 grid meter", port: "15020", unitId: "1", loadKw: "100" },
@@ -39,6 +39,13 @@ const DEVICE_DEFAULTS = {
     label: "Solis inverter",
     port: "15022",
     unitId: "3",
+    ratingKw: "100",
+    availabilityPct: "80",
+  },
+  sungrow: {
+    label: "Sungrow inverter",
+    port: "15023",
+    unitId: "4",
     ratingKw: "100",
     availabilityPct: "80",
   },
@@ -67,7 +74,7 @@ export function SimulatorView({ devices, profiles, notify, onForwardProfile }) {
       ]),
     ),
   );
-  const [values, setValues] = useState({ em500: [], huawei: [], solis: [] });
+  const [values, setValues] = useState({ em500: [], huawei: [], solis: [], sungrow: [] });
   const [working, setWorking] = useState("");
   const [error, setError] = useState("");
   const [deratingPct, setDeratingPct] = useState("100");
@@ -122,12 +129,13 @@ export function SimulatorView({ devices, profiles, notify, onForwardProfile }) {
       if (cancelled) return;
       if (!document.hidden) {
         try {
-          const [em500, huawei, solis] = await Promise.all([
+          const [em500, huawei, solis, sungrow] = await Promise.all([
             api.getSimulatorValues("em500"),
             api.getSimulatorValues("huawei"),
             api.getSimulatorValues("solis"),
+            api.getSimulatorValues("sungrow"),
           ]);
-          setValues({ em500: em500.data || [], huawei: huawei.data || [], solis: solis.data || [] });
+          setValues({ em500: em500.data || [], huawei: huawei.data || [], solis: solis.data || [], sungrow: sungrow.data || [] });
           failures = 0;
         } catch {
           failures += 1;
@@ -156,11 +164,16 @@ export function SimulatorView({ devices, profiles, notify, onForwardProfile }) {
     () => profiles.find((profile) => profile.identifier === "solis-inverter"),
     [profiles],
   );
+  const sungrowProfile = useMemo(
+    () => profiles.find((profile) => profile.identifier === "sungrow-inverter"),
+    [profiles],
+  );
   const simulatorDevices = useMemo(
     () => ({
       em500: devices.find((device) => device.identifier === "em500-simulator"),
       huawei: devices.find((device) => device.identifier === "huawei-simulator"),
       solis: devices.find((device) => device.identifier === "solis-simulator"),
+      sungrow: devices.find((device) => device.identifier === "sungrow-simulator"),
     }),
     [devices],
   );
@@ -245,6 +258,7 @@ export function SimulatorView({ devices, profiles, notify, onForwardProfile }) {
     if (!em500Profile) missing.push("EM500 profile (restore built-ins)");
     if (!huaweiProfile) missing.push("Huawei profile (restore built-ins)");
     if (!solisProfile) missing.push("Solis profile (restore built-ins)");
+    if (!sungrowProfile) missing.push("Sungrow profile (restore built-ins)");
     if (missing.length > 0) {
       notify(`Missing: ${missing.join(", ")}`, "error");
       return;
@@ -253,6 +267,7 @@ export function SimulatorView({ devices, profiles, notify, onForwardProfile }) {
       const em500UnitId = Number(forms.em500.unitId);
       const huaweiUnitId = Number(forms.huawei.unitId);
       const solisUnitId = Number(forms.solis.unitId);
+      const sungrowUnitId = Number(forms.sungrow.unitId);
       const created = [];
       if (!simulatorDevices.em500) {
         await api.createDevice({
@@ -295,6 +310,20 @@ export function SimulatorView({ devices, profiles, notify, onForwardProfile }) {
           tags: ["simulator"],
         });
         created.push("Solis inverter");
+      }
+      if (!simulatorDevices.sungrow) {
+        await api.createDevice({
+          identifier: "sungrow-simulator",
+          name: "Sungrow Inverter Simulator",
+          site: "Simulator",
+          unitId: sungrowUnitId,
+          connection: { protocol: "TCP", host: "127.0.0.1", port: Number(forms.sungrow.port) },
+          registerProfileId: sungrowProfile._id,
+          polling: { enabled: true, intervalMs: 5000, jitterMs: 1000 },
+          reconnect: { timeoutMs: 2000, retries: 1, retryDelayMs: 200 },
+          tags: ["simulator"],
+        });
+        created.push("Sungrow inverter");
       }
       notify(
         created.length > 0
@@ -747,7 +776,9 @@ export function SimulatorView({ devices, profiles, notify, onForwardProfile }) {
                           ? em500Profile
                           : key === "huawei"
                             ? huaweiProfile
-                            : solisProfile,
+                            : key === "solis"
+                              ? solisProfile
+                              : sungrowProfile,
                       )
                     }
                     disabled={!deviceRef || Boolean(working)}

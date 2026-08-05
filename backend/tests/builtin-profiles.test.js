@@ -283,7 +283,7 @@ test('built-in profile seed skips identifiers that already exist at the current 
   const results = await seedBuiltinProfiles(repository);
   assert.deepEqual(
     results.map((result) => result.action),
-    ['SKIPPED', 'SKIPPED', 'SKIPPED'],
+    ['SKIPPED', 'SKIPPED', 'SKIPPED', 'SKIPPED'],
   );
 });
 
@@ -306,10 +306,11 @@ test('built-in profile seed upgrades stale built-in profiles to the shipped vers
   };
 
   const results = await seedBuiltinProfiles(repository);
-  // All three built-ins ship above version 1, so stale v1 built-ins upgrade.
+  // EM500/Huawei/Solis ship above version 1 and upgrade; Sungrow ships at
+  // version 1 so it stays as-is.
   assert.deepEqual(
     results.map((result) => result.action),
-    ['UPDATED', 'UPDATED', 'UPDATED'],
+    ['UPDATED', 'UPDATED', 'UPDATED', 'SKIPPED'],
   );
 
   const em500Upgrade = updated.find((profile) => profile.identifier === 'em500');
@@ -340,7 +341,7 @@ test('built-in profile seed never touches operator-created profiles', async () =
   const results = await seedBuiltinProfiles(repository);
   assert.deepEqual(
     results.map((result) => result.action),
-    ['SKIPPED', 'SKIPPED', 'SKIPPED'],
+    ['SKIPPED', 'SKIPPED', 'SKIPPED', 'SKIPPED'],
   );
 });
 
@@ -358,9 +359,9 @@ test('RegisterProfileService.restoreBuiltIns recreates deleted built-in profiles
   });
 
   const result = await service.restoreBuiltIns();
-  assert.deepEqual(result.restored, ['em500', 'huawei-sun2000', 'solis-inverter']);
+  assert.deepEqual(result.restored, ['em500', 'huawei-sun2000', 'solis-inverter', 'sungrow-inverter']);
   assert.deepEqual(result.alreadyPresent, []);
-  assert.equal(result.total, 3);
+  assert.equal(result.total, 4);
   assert.ok(created.every((profile) => profile.builtIn === true));
 });
 
@@ -388,11 +389,44 @@ test('RegisterProfileService.restoreBuiltIns reports profiles that already exist
   });
 
   const result = await service.restoreBuiltIns();
-  assert.deepEqual(result.restored, ['huawei-sun2000', 'solis-inverter']);
+  assert.deepEqual(result.restored, ['huawei-sun2000', 'solis-inverter', 'sungrow-inverter']);
   assert.deepEqual(result.alreadyPresent, ['em500']);
-  assert.equal(result.total, 3);
+  assert.equal(result.total, 4);
   assert.deepEqual(
     created.map((profile) => profile.identifier),
-    ['huawei-sun2000', 'solis-inverter'],
+    ['huawei-sun2000', 'solis-inverter', 'sungrow-inverter'],
   );
+});
+
+test('built-in Sungrow profile covers the protocol and telemetry map', () => {
+  const { SUNGROW_PROFILE } = require('../src/seed/sungrow-inverter.profile');
+  const parsed = createRegisterProfileBodySchema.parse(SUNGROW_PROFILE);
+
+  assert.equal(parsed.identifier, 'sungrow-inverter');
+  assert.equal(parsed.registers.length, 41);
+
+  const byKey = new Map(parsed.registers.map((register) => [register.key, register]));
+
+  // Identity registers are FC03 holding.
+  assert.equal(byKey.get('protocol_number').address, 4950);
+  assert.equal(byKey.get('protocol_number').registerType, 'HOLDING_REGISTER');
+  assert.equal(byKey.get('arm_software_version').dataType, 'STRING');
+  assert.equal(byKey.get('arm_software_version').length, 15);
+  assert.equal(byKey.get('serial_number').length, 10);
+  assert.equal(byKey.get('nominal_active_power').address, 5001);
+  assert.equal(byKey.get('nominal_active_power').scaleFactor, 0.1);
+
+  // Telemetry registers are FC04 input.
+  assert.equal(byKey.get('daily_yield').address, 5003);
+  assert.equal(byKey.get('daily_yield').registerType, 'INPUT_REGISTER');
+  assert.equal(byKey.get('total_yield').address, 5004);
+  assert.equal(byKey.get('active_power').address, 5031);
+  assert.equal(byKey.get('active_power').dataType, 'INT32');
+  assert.equal(byKey.get('grid_frequency').address, 5036);
+  assert.equal(byKey.get('grid_frequency').scaleFactor, 0.1);
+  assert.equal(byKey.get('power_factor').scaleFactor, 0.001);
+  assert.equal(byKey.get('work_state').address, 5038);
+  assert.equal(byKey.get('mppt1_voltage').address, 5011);
+  assert.equal(byKey.get('mppt8_current').address, 5124);
+  assert.equal(byKey.get('total_dc_power').address, 5017);
 });

@@ -192,6 +192,24 @@ repository/model, route, and validation boundaries.
   simulated meter flows through the exact poll → forward → downstream path as
   a real meter.
 
+### Step 12 — Sungrow inverter profile and simulator
+
+- A built-in **Sungrow inverter** register profile ships with the backend
+  (`backend/src/seed/sungrow-inverter.profile.js`, 41 registers): protocol/
+  identity (FC03 holding — protocol number/version, ARM/DSP software
+  versions, serial number, device type code, nominal power, grid type) and
+  live telemetry (FC04 input — daily/total yield, running time, internal
+  temperature, apparent power, MPPT 1-8 DC voltage/current, total DC power,
+  grid phase/line voltages, phase currents, total active/reactive power,
+  power factor, grid frequency, work state). Addresses are used directly as
+  wire addresses; `maxReadQuantity: 50`.
+- The simulator farm gains a **Sungrow inverter** (port `15023`, unit 4) that
+  runs at rating × availability; the EM500 meter couples to **all three
+  inverters** (grid = load − huawei − solis − sungrow). E2E verified:
+  inverters ≈ 78/81/79 kW → meter −138 kW with a 100 kW load. No writable
+  power control register was provided yet; add the site's control map when
+  available and the Power control card will pick it up automatically.
+
 ### Step 11 — Solis inverter profile and simulator
 
 - A built-in **Solis (Ginlong) inverter** register profile ships with the

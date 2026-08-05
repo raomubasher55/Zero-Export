@@ -182,7 +182,7 @@ test('Huawei simulator serves holding registers and accepts derating writes', as
 
 test('simulator manager exposes every device and their values', async () => {
   const status = getStatus();
-  assert.deepEqual(Object.keys(status.devices).sort(), ['em500', 'huawei', 'solis']);
+  assert.deepEqual(Object.keys(status.devices).sort(), ['em500', 'huawei', 'solis', 'sungrow']);
   // Stopped devices serve no values until started and ticked.
   assert.equal(getValues('em500').length, 0);
   assert.equal(getValues('huawei').length, 0);
@@ -196,6 +196,9 @@ test('simulator manager exposes every device and their values', async () => {
   assert.equal(simulatorDevices.solis.getStatus().port, 15022);
   assert.equal(simulatorDevices.solis.getStatus().unitId, 3);
   assert.equal(simulatorDevices.solis.getStatus().deviceType, 'Solis inverter');
+  assert.equal(simulatorDevices.sungrow.getStatus().port, 15023);
+  assert.equal(simulatorDevices.sungrow.getStatus().unitId, 4);
+  assert.equal(simulatorDevices.sungrow.getStatus().deviceType, 'Sungrow inverter');
 });
 
 test('Solis simulator serves FC04 inputs and accepts active power limit writes', async () => {
@@ -420,4 +423,48 @@ test('stopped simulators report no values (no stale data)', async () => {
   await device.stop();
   assert.equal(getValues('solis').length, 0, 'stopped device serves no values');
   if (wasRunning) await device.start();
+});
+
+test('Sungrow simulator serves FC04 telemetry and FC03 identity', async () => {
+  const { SUNGROW_PROFILE } = require('../src/seed/sungrow-inverter.profile');
+  const SUNGROW_BY_KEY = new Map(SUNGROW_PROFILE.registers.map((r) => [r.key, r]));
+  const { instance } = device({
+    profile: SUNGROW_PROFILE,
+    deviceType: 'Sungrow inverter',
+    configuration: { port: 15023, unitId: 4, updateIntervalMs: 60000 },
+    options: { ratingKw: 100, availabilityPct: 80, loadKw: 100 },
+  });
+  await instance.start();
+
+  const vector = instance.createVector();
+
+  const powerWords = vector.getMultipleInputRegisters(5031, 2, 4);
+  const power = decodeRegister(SUNGROW_BY_KEY.get('active_power'), powerWords);
+  assert.ok(power.value > 40000 && power.value < 90000, `output in range, got ${power.value} W`);
+
+  const voltage = vector.getMultipleInputRegisters(5019, 1, 4);
+  assert.ok(
+    decodeRegister(SUNGROW_BY_KEY.get('grid_voltage_a'), voltage).value > 225,
+    'grid voltage served',
+  );
+
+  const freq = vector.getMultipleInputRegisters(5036, 1, 4);
+  assert.ok(
+    Math.abs(decodeRegister(SUNGROW_BY_KEY.get('grid_frequency'), freq).value - 50) < 0.3,
+    'frequency ~50 Hz',
+  );
+
+  const mppt8 = vector.getMultipleInputRegisters(5124, 1, 4);
+  assert.ok(decodeRegister(SUNGROW_BY_KEY.get('mppt8_current'), mppt8).value > 0, 'MPPT 8 current served');
+
+  const identity = vector.getMultipleHoldingRegisters(4950, 2, 4);
+  assert.ok(identity.length === 2, 'identity registers readable on FC03');
+
+  assert.throws(
+    () => vector.getMultipleInputRegisters(5031, 51, 4),
+    (error) => error.modbusErrorCode === 0x03,
+    '51-register batch exceeds the 50 limit',
+  );
+
+  await instance.stop();
 });

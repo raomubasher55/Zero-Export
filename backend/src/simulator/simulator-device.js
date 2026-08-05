@@ -149,6 +149,17 @@ class SimulatorDevice {
   }
 
   createModel() {
+    if (this.deviceType === 'Sungrow inverter') {
+      return {
+        manufacturer: 'Sungrow',
+        phaseVoltage: [230.1, 231.0, 229.5],
+        frequency: 50.0,
+        totalYieldKwh: 98765.4,
+        dailyYieldKwh: 420.3,
+        runningHours: 12345,
+        startedAt: null,
+      };
+    }
     if (this.deviceType === 'Solis inverter') {
       return {
         manufacturer: 'Solis',
@@ -465,7 +476,9 @@ class SimulatorDevice {
         ? this.computeHuawei()
         : this.deviceType === 'Solis inverter'
           ? this.computeSolis()
-          : this.computeEm500();
+          : this.deviceType === 'Sungrow inverter'
+            ? this.computeSungrow()
+            : this.computeEm500();
 
     for (const register of this.profile.registers) {
       let engineeringValue = values[register.key];
@@ -515,15 +528,17 @@ class SimulatorDevice {
   defaultCoupledInverterKw() {
     try {
       const { getDevice } = require('../simulator');
-      const keys = ['huawei', 'solis'];
+      const keys = ['huawei', 'solis', 'sungrow'];
       let total = 0;
       for (const key of keys) {
         const inverter = getDevice(key);
         if (!inverter || inverter.getStatus().state !== 'RUNNING') continue;
         const value = inverter.values.get('active_power');
         if (value) {
-          // Huawei publishes kW; Solis publishes W (scale 1 register).
-          total += key === 'solis' ? Number(value.value) / 1000 : Number(value.value);
+          // Huawei publishes kW; Solis and Sungrow publish W (scale 1).
+          total += ['solis', 'sungrow'].includes(key)
+            ? Number(value.value) / 1000
+            : Number(value.value);
           continue;
         }
         // Fallback: deterministic model output before the first published tick.
@@ -810,6 +825,84 @@ class SimulatorDevice {
       power_limit_switch_operation_bit: 3,
       power_limit_switch: 0xaa,
       reactive_power_switch: 0x55,
+    };
+  }
+
+  computeSungrow() {
+    const model = this.model;
+    const options = this.configuration.options;
+
+    model.phaseVoltage = model.phaseVoltage.map((v) => drift(v, 0.5, 225, 240));
+    model.frequency = drift(model.frequency, 0.02, 49.9, 50.1);
+
+    const ratingKw = options.ratingKw || 100;
+    const availabilityPct = clamp(options.availabilityPct ?? 100, 0, 100);
+
+    // No writable derating register was provided; the Sungrow simulator runs
+    // at rating x availability (100% output).
+    let outputKw = ratingKw * (availabilityPct / 100);
+    outputKw = Math.max(0, outputKw * (0.97 + Math.random() * 0.06));
+
+    const dtHours = this.configuration.updateIntervalMs / 3600000;
+    model.totalYieldKwh += outputKw * dtHours;
+    model.dailyYieldKwh += outputKw * dtHours;
+    model.runningHours += dtHours;
+
+    const avgVoltage = model.phaseVoltage.reduce((a, b) => a + b, 0) / 3;
+    const pf = 0.99;
+    const current = (outputKw * 1000) / (3 * avgVoltage * pf);
+
+    const dcPowerKw = outputKw / 0.985;
+    const mpptVoltages = Array.from({ length: 8 }, (_, index) => drift(600 + index * 5, 2, 560, 660));
+    const mpptCurrents = mpptVoltages.map((voltage) =>
+      clamp((dcPowerKw * 1000) / 8 / voltage, 0.5, 20),
+    );
+
+    return {
+      // Identity (FC03 holding)
+      protocol_number: 0x00010001,
+      protocol_version: 0x00020003,
+      arm_software_version: 'V100.01.02',
+      dsp_software_version: 'V200.01.03',
+      serial_number: 'SN-SG100-000001',
+      device_type_code: 0x0138,
+      nominal_active_power: ratingKw,
+      output_grid_type: 1,
+
+      // Live telemetry (FC04 input)
+      daily_yield: model.dailyYieldKwh,
+      total_yield: model.totalYieldKwh,
+      total_running_time: model.runningHours,
+      internal_temperature: 43.5,
+      total_apparent_power: (outputKw * 1000) / pf,
+      mppt1_voltage: mpptVoltages[0],
+      mppt1_current: mpptCurrents[0],
+      mppt2_voltage: mpptVoltages[1],
+      mppt2_current: mpptCurrents[1],
+      mppt3_voltage: mpptVoltages[2],
+      mppt3_current: mpptCurrents[2],
+      total_dc_power: dcPowerKw * 1000,
+      grid_voltage_a: model.phaseVoltage[0],
+      grid_voltage_b: model.phaseVoltage[1],
+      grid_voltage_c: model.phaseVoltage[2],
+      phase_a_current: current,
+      phase_b_current: current,
+      phase_c_current: current,
+      active_power: outputKw * 1000,
+      reactive_power: outputKw * 1000 * 0.05,
+      power_factor: pf,
+      grid_frequency: model.frequency,
+      work_state: model.startedAt || this.state === 'RUNNING' ? 0 : 0x0020,
+      mppt4_voltage: mpptVoltages[3],
+      mppt4_current: mpptCurrents[3],
+      mppt5_voltage: mpptVoltages[4],
+      mppt5_current: mpptCurrents[4],
+      mppt6_voltage: mpptVoltages[5],
+      mppt6_current: mpptCurrents[5],
+      mppt7_voltage: mpptVoltages[6],
+      mppt7_current: mpptCurrents[6],
+      mppt8_voltage: mpptVoltages[7],
+      mppt8_current: mpptCurrents[7],
     };
   }
 

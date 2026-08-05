@@ -5,6 +5,7 @@ const { SimulatorDevice, waitForServer } = require('./simulator-device');
 const { EM500_PROFILE } = require('../seed/em500.profile');
 const { HUAWEI_SUN2000_PROFILE } = require('../seed/huawei-sun2000.profile');
 const { SOLIS_PROFILE } = require('../seed/solis-inverter.profile');
+const { SUNGROW_PROFILE } = require('../seed/sungrow-inverter.profile');
 
 /**
  * Simulator farm: one or more Modbus TCP slaves.
@@ -54,6 +55,22 @@ const simulatorDevices = Object.freeze({
       host: '0.0.0.0',
       port: 15022,
       unitId: 3,
+      updateIntervalMs: 1000,
+      options: {
+        ratingKw: 100,
+        availabilityPct: 80,
+        loadKw: 100,
+      },
+    },
+  }),
+  sungrow: new SimulatorDevice({
+    key: 'sungrow',
+    deviceType: 'Sungrow inverter',
+    profile: SUNGROW_PROFILE,
+    defaultConfiguration: {
+      host: '0.0.0.0',
+      port: 15023,
+      unitId: 4,
       updateIntervalMs: 1000,
       options: {
         ratingKw: 100,
@@ -170,8 +187,18 @@ async function startAll() {
     if (!groups.has(groupKey)) groups.set(groupKey, []);
     groups.get(groupKey).push(device);
   }
-  for (const devices of groups.values()) {
-    await startSharedGroup(devices);
+  // Start the inverters before the meter so the coupled meter's first tick
+  // already sees every inverter's output (grid = load - inverters).
+  const order = ['huawei', 'solis', 'sungrow', 'em500'];
+  const orderedGroups = [];
+  for (const key of order) {
+    const groupKey = portKeyOf(simulatorDevices[key]);
+    if (groups.has(groupKey) && !orderedGroups.includes(groupKey)) {
+      orderedGroups.push(groupKey);
+    }
+  }
+  for (const groupKey of orderedGroups) {
+    await startSharedGroup(groups.get(groupKey));
   }
   return getStatus();
 }
