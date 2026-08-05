@@ -306,11 +306,10 @@ test('built-in profile seed upgrades stale built-in profiles to the shipped vers
   };
 
   const results = await seedBuiltinProfiles(repository);
-  // EM500/Huawei/Solis ship above version 1 and upgrade; Sungrow ships at
-  // version 1 so it stays as-is.
+  // All four built-ins ship above version 1, so stale v1 built-ins upgrade.
   assert.deepEqual(
     results.map((result) => result.action),
-    ['UPDATED', 'UPDATED', 'UPDATED', 'SKIPPED'],
+    ['UPDATED', 'UPDATED', 'UPDATED', 'UPDATED'],
   );
 
   const em500Upgrade = updated.find((profile) => profile.identifier === 'em500');
@@ -403,7 +402,7 @@ test('built-in Sungrow profile covers the protocol and telemetry map', () => {
   const parsed = createRegisterProfileBodySchema.parse(SUNGROW_PROFILE);
 
   assert.equal(parsed.identifier, 'sungrow-inverter');
-  assert.equal(parsed.registers.length, 41);
+  assert.equal(parsed.registers.length, 42);
 
   const byKey = new Map(parsed.registers.map((register) => [register.key, register]));
 
@@ -429,4 +428,11 @@ test('built-in Sungrow profile covers the protocol and telemetry map', () => {
   assert.equal(byKey.get('mppt1_voltage').address, 5011);
   assert.equal(byKey.get('mppt8_current').address, 5124);
   assert.equal(byKey.get('total_dc_power').address, 5017);
+
+  // Active power control write register at 5007.
+  const limit = byKey.get('active_power_limit_set');
+  assert.equal(limit.address, 5007);
+  assert.equal(limit.registerType, 'HOLDING_REGISTER');
+  assert.equal(limit.writable, true);
+  assert.equal(limit.scaleFactor, 0.01);
 });

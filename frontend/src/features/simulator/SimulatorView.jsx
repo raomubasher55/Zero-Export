@@ -53,7 +53,7 @@ const DEVICE_DEFAULTS = {
 
 // Inverter simulator keys that expose a writable derating/power-limit
 // register in their profile.
-const DERATING_DEVICE_KEYS = ["huawei", "solis"];
+const DERATING_DEVICE_KEYS = ["huawei", "solis", "sungrow"];
 
 export function SimulatorView({ devices, profiles, notify, onForwardProfile }) {
   const [status, setStatus] = useState(null);
@@ -640,7 +640,7 @@ export function SimulatorView({ devices, profiles, notify, onForwardProfile }) {
                   </span>
                   <span>·</span>
                   <span>Unit {deviceStatus?.unitId ?? form.unitId}</span>
-                  {(key === "huawei" || key === "solis") && (
+                  {(key === "huawei" || key === "solis" || key === "sungrow") && (
                     <>
                       <span>·</span>
                       <span>
@@ -683,7 +683,7 @@ export function SimulatorView({ devices, profiles, notify, onForwardProfile }) {
                       onChange={(event) => setField(key, "updateIntervalMs", event.target.value)}
                     />
                   </Field>
-                  {(key === "huawei" || key === "solis") && (
+                  {(key === "huawei" || key === "solis" || key === "sungrow") && (
                     <>
                       <Field label="Solar rating (kW)">
                         <Input

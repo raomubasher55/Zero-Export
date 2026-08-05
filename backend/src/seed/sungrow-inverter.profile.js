@@ -21,7 +21,7 @@
 const { REGISTER_DATA_TYPES } = require('../constants/modbus');
 const { expectedWordLength } = require('../utils/register-length');
 
-function register({ address, key, name, dataType, scaleFactor = 1, unit, group, holding = false, length }) {
+function register({ address, key, name, dataType, scaleFactor = 1, unit, group, holding = false, length, writable = false }) {
   return {
     key,
     name,
@@ -37,7 +37,7 @@ function register({ address, key, name, dataType, scaleFactor = 1, unit, group, 
     offset: 0,
     unit: unit || undefined,
     group,
-    writable: false,
+    writable,
     enabled: true,
     sortOrder: 0,
   };
@@ -60,6 +60,7 @@ const MEASUREMENTS = 'Measurements';
 const ENERGY = 'Energy';
 const STATUS = 'Status';
 const MPPT = 'MPPT';
+const CONTROL = 'Control';
 
 const registers = [
   // --- Protocol / identity (FC03 holding) ---
@@ -76,6 +77,9 @@ const registers = [
   register({ address: 5003, key: 'daily_yield', name: 'Daily energy yield', dataType: REGISTER_DATA_TYPES.UINT16, scaleFactor: 0.1, unit: 'kWh', group: ENERGY }),
   register({ address: 5004, key: 'total_yield', name: 'Total energy yield', dataType: REGISTER_DATA_TYPES.UINT32, scaleFactor: 1, unit: 'kWh', group: ENERGY }),
   register({ address: 5006, key: 'total_running_time', name: 'Total running time', dataType: REGISTER_DATA_TYPES.UINT32, scaleFactor: 1, unit: 'h', group: STATUS }),
+  // Active power control set register (writable holding, 5007). Scale is
+  // applied per the site: 10000 = 100% in 0.01% steps.
+  register({ address: 5007, key: 'active_power_limit_set', name: 'Active power control (set)', dataType: REGISTER_DATA_TYPES.UINT16, scaleFactor: 0.01, unit: '%', group: CONTROL, holding: true, writable: true }),
   register({ address: 5008, key: 'internal_temperature', name: 'Internal temperature', dataType: REGISTER_DATA_TYPES.INT16, scaleFactor: 0.1, unit: '°C', group: STATUS }),
   register({ address: 5009, key: 'total_apparent_power', name: 'Total apparent power', dataType: REGISTER_DATA_TYPES.UINT32, scaleFactor: 1, unit: 'VA', group: MEASUREMENTS }),
   register({ address: 5011, key: 'mppt1_voltage', name: 'MPPT 1 DC voltage', dataType: REGISTER_DATA_TYPES.UINT16, scaleFactor: 0.1, unit: 'V', group: MPPT }),
@@ -112,7 +116,7 @@ const SUNGROW_PROFILE = Object.freeze({
   identifier: 'sungrow-inverter',
   name: 'Sungrow inverter',
   description:
-    'Built-in Sungrow inverter register map: protocol/identity (FC03 holding: protocol number/version, ARM/DSP software versions, serial number, device type code, nominal power, grid type) and live telemetry (FC04 input: daily/total yield, running time, internal temperature, apparent power, MPPT 1-8 DC voltage/current, total DC power, grid phase/line voltages, phase currents, total active/reactive power, power factor, grid frequency, work state). Addresses are used directly as wire addresses.',
+    'Built-in Sungrow inverter register map: protocol/identity (FC03 holding: protocol number/version, ARM/DSP software versions, serial number, device type code, nominal power, grid type), live telemetry (FC04 input: daily/total yield, running time, internal temperature, apparent power, MPPT 1-8 DC voltage/current, total DC power, grid phase/line voltages, phase currents, total active/reactive power, power factor, grid frequency, work state), and the active power control set register at 5007 (writable). Addresses are used directly as wire addresses.',
   manufacturer: 'Sungrow',
   model: 'SG series inverter',
   registers: Object.freeze(registers),
@@ -120,9 +124,9 @@ const SUNGROW_PROFILE = Object.freeze({
   maxReadQuantity: 50,
   tags: Object.freeze(['sungrow', 'inverter', 'built-in']),
   metadata: Object.freeze({
-    profileVersion: 1,
+    profileVersion: 2,
     notes:
-      'Protocol addresses used directly. Telemetry on FC04, identity on FC03. No writable power control registers were provided; add them once the site control map is confirmed.',
+      'Protocol addresses used directly. Telemetry on FC04, identity on FC03. Active power control set register at 5007 (writable, 10000 = 100%).',
   }),
 });
 
