@@ -477,3 +477,53 @@ test('Sungrow simulator serves FC04 telemetry and FC03 identity', async () => {
 
   await instance.stop();
 });
+
+test('simulator settings update syncs the linked EMS device unit ID and port', async () => {
+  const SimulatorController = require('../src/controllers/simulator.controller');
+  const { simulatorDevices } = require('../src/simulator');
+  const fakeRuntime = {
+    getDevice: (key) => simulatorDevices[key],
+    getStatus: () => require('../src/simulator').getStatus(),
+    getValues: () => [],
+    logger: { warn: () => undefined },
+  };
+  const settingsRepository = {
+    save: async () => undefined,
+  };
+  let updatedPatch = null;
+  const deviceRepository = {
+    findOne: async ({ identifier }) =>
+      identifier === 'sungrow-simulator'
+        ? {
+            _id: '507f1f77bcf86cd799439099',
+            identifier,
+            unitId: 4,
+            connection: { protocol: 'TCP', host: '127.0.0.1', port: 15023 },
+          }
+        : null,
+    updateById: async (id, patch) => {
+      updatedPatch = patch;
+      return { _id: id, identifier: 'sungrow-simulator', ...patch };
+    },
+  };
+  const controller = new SimulatorController(fakeRuntime, settingsRepository, deviceRepository);
+
+  // stop first so configure is allowed
+  await require('../src/simulator').stopDevice('sungrow');
+  const res = { status: () => res, json: (payload) => payload };
+  const req = {
+    validated: {
+      params: { deviceKey: 'sungrow' },
+      body: { host: '0.0.0.0', port: 15024, unitId: 7, updateIntervalMs: 1000 },
+    },
+  };
+  await controller.updateDevice(req, res);
+
+  assert.equal(simulatorDevices.sungrow.getStatus().unitId, 7);
+  assert.equal(simulatorDevices.sungrow.getStatus().port, 15024);
+  assert.equal(updatedPatch.unitId, 7);
+  assert.equal(updatedPatch.connection.port, 15024);
+  // restore defaults
+  await require('../src/simulator').stopDevice('sungrow');
+  simulatorDevices.sungrow.configure({ host: '0.0.0.0', port: 15023, unitId: 4, updateIntervalMs: 1000 });
+});

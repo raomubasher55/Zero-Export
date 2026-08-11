@@ -188,7 +188,12 @@ export function SimulatorView({ devices, profiles, notify, onForwardProfile }) {
         ...current,
         devices: { ...current?.devices, [deviceKey]: deviceStatus },
       }));
-      notify(successMessage);
+      const synced = response.meta?.syncedDevice;
+      notify(
+        synced
+          ? `${successMessage} (${DEVICE_DEFAULTS[deviceKey].label} device unit ID/port synced to match.)`
+          : successMessage,
+      );
     } catch (operationError) {
       setError(operationError?.message || "Simulator operation failed.");
       notify(operationError?.message || "Simulator operation failed.", "error");
@@ -205,7 +210,7 @@ export function SimulatorView({ devices, profiles, notify, onForwardProfile }) {
       unitId: Number(form.unitId),
       updateIntervalMs: Number(form.updateIntervalMs),
     };
-    if (deviceKey === "huawei" || deviceKey === "solis") {
+    if (deviceKey === "huawei" || deviceKey === "solis" || deviceKey === "sungrow") {
       payload.options = {
         ratingKw: Number(form.ratingKw),
         availabilityPct: Number(form.availabilityPct),
